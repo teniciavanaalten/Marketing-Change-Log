@@ -1,0 +1,155 @@
+import React, { useState } from 'react';
+import { X, Plus, Settings } from 'lucide-react';
+import { ChangeType, ChangeLog, Platform, Campaign } from '../../types';
+import { CHANGE_TYPES } from '../../constants';
+import { Button } from '../UI/Button';
+
+interface AddChangeModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (log: Omit<ChangeLog, 'id'>) => void;
+  platform: Platform;
+  campaigns: Campaign[];
+  onManageCampaigns: () => void;
+}
+
+export const AddChangeModal: React.FC<AddChangeModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onSubmit, 
+  platform,
+  campaigns,
+  onManageCampaigns
+}) => {
+  const [formData, setFormData] = useState({
+    campaignName: '',
+    changeType: ChangeType.BUDGET_CHANGE,
+    description: '',
+    date: new Date().toISOString().split('T')[0],
+    tags: ''
+  });
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({
+      platform,
+      campaignName: formData.campaignName,
+      changeType: formData.changeType,
+      description: formData.description,
+      date: formData.date,
+      tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean)
+    });
+    onClose();
+    // Reset form
+    setFormData({
+      campaignName: '',
+      changeType: ChangeType.BUDGET_CHANGE,
+      description: '',
+      date: new Date().toISOString().split('T')[0],
+      tags: ''
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal Content */}
+      <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Log New Change</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Date</label>
+              <input 
+                type="date"
+                required
+                value={formData.date}
+                onChange={e => setFormData({...formData, date: e.target.value})}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Type</label>
+              <select 
+                value={formData.changeType}
+                onChange={e => setFormData({...formData, changeType: e.target.value as ChangeType})}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+              >
+                {CHANGE_TYPES.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+             <div className="flex justify-between items-center mb-1">
+                <label className="block text-xs font-medium text-slate-500">Campaign</label>
+                <button 
+                  type="button" 
+                  onClick={onManageCampaigns}
+                  className="text-[10px] text-brand-500 hover:underline flex items-center gap-1 font-medium"
+                >
+                  <Settings size={10} /> Manage List
+                </button>
+             </div>
+             <input 
+                type="text"
+                list="campaigns-list"
+                required
+                placeholder="e.g. Summer Sale 2024"
+                value={formData.campaignName}
+                onChange={e => setFormData({...formData, campaignName: e.target.value})}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                autoComplete="off"
+             />
+             <datalist id="campaigns-list">
+                {campaigns.map(c => <option key={c.id} value={c.name} />)}
+             </datalist>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Description</label>
+            <textarea 
+              required
+              rows={3}
+              placeholder="What specifically changed? (e.g. Increased daily budget to $500)"
+              value={formData.description}
+              onChange={e => setFormData({...formData, description: e.target.value})}
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Tags (comma separated)</label>
+            <input 
+              type="text"
+              placeholder="budget, scale, optimization"
+              value={formData.tags}
+              onChange={e => setFormData({...formData, tags: e.target.value})}
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+            />
+          </div>
+
+          <div className="pt-2 flex justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="submit">Save Change</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};

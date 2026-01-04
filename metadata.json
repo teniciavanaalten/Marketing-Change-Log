@@ -1,0 +1,5 @@
+{
+  "name": "MarketerLog",
+  "description": "A campaign change log and performance analytics dashboard for marketers. Track changes across LinkedIn, Google, and Meta ads and correlate them with performance metrics.",
+  "requestFramePermissions": []
+}
