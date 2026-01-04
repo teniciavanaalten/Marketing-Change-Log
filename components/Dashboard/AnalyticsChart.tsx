@@ -22,9 +22,19 @@ interface AnalyticsChartProps {
 type Granularity = 'daily' | 'weekly' | 'monthly';
 
 export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeLogs, isLoading }) => {
-  const { theme } = useApp();
+  const { theme, customMetrics } = useApp();
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('clicks');
   const [granularity, setGranularity] = useState<Granularity>('daily');
+
+  // Combine standard and custom metrics options
+  const allMetricOptions = useMemo(() => {
+    const customOptions = customMetrics.map(m => ({
+      key: m.key,
+      label: m.label,
+      format: m.format
+    }));
+    return [...METRIC_OPTIONS, ...customOptions];
+  }, [customMetrics]);
 
   // Helper to get start of week (Monday)
   const getStartOfWeek = (d: Date) => {
@@ -48,6 +58,8 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
       clicks: number;
       spend: number;
       conversions: number;
+      customAgg: Record<string, number>;
+      customCounts: Record<string, number>; // Used for averaging
       changeLogs: ChangeLog[];
     }>();
 
@@ -73,6 +85,8 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
           clicks: 0,
           spend: 0,
           conversions: 0,
+          customAgg: {},
+          customCounts: {},
           changeLogs: []
         });
       }
@@ -83,7 +97,15 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
       entry.spend += m.spend;
       entry.conversions += m.conversions;
 
-      // Find logs for this specific day and add to group
+      // Handle Custom Metrics Aggregation
+      if (m.customMetrics) {
+        Object.keys(m.customMetrics).forEach(cKey => {
+          const val = m.customMetrics![cKey] || 0;
+          entry.customAgg[cKey] = (entry.customAgg[cKey] || 0) + val;
+          entry.customCounts[cKey] = (entry.customCounts[cKey] || 0) + 1;
+        });
+      }
+
       const daysLogs = changeLogs.filter(l => l.date === m.date);
       entry.changeLogs.push(...daysLogs);
     });
@@ -95,6 +117,19 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
         const ctr = entry.impressions > 0 ? (entry.clicks / entry.impressions) * 100 : 0;
         const cpc = entry.clicks > 0 ? entry.spend / entry.clicks : 0;
         const conversionRate = entry.clicks > 0 ? (entry.conversions / entry.clicks) * 100 : 0;
+
+        // Flatten custom metrics based on aggregation type
+        const flattenedCustom: Record<string, number> = {};
+        customMetrics.forEach(def => {
+          const total = entry.customAgg[def.key] || 0;
+          const count = entry.customCounts[def.key] || 1;
+          
+          if (def.aggregation === 'average' && count > 0) {
+            flattenedCustom[def.key] = parseFloat((total / count).toFixed(2));
+          } else {
+            flattenedCustom[def.key] = parseFloat(total.toFixed(2));
+          }
+        });
 
         // Date formatting based on granularity
         let displayDate = '';
@@ -116,6 +151,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
           ctr: parseFloat(ctr.toFixed(2)),
           cpc: parseFloat(cpc.toFixed(2)),
           conversionRate: parseFloat(conversionRate.toFixed(2)),
+          ...flattenedCustom, // Spread custom metrics to top level
           displayDate,
           fullDate,
           hasChange: entry.changeLogs.length > 0
@@ -123,9 +159,9 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
       });
 
     return result;
-  }, [metrics, changeLogs, granularity]);
+  }, [metrics, changeLogs, granularity, customMetrics]);
 
-  const activeMetricConfig = METRIC_OPTIONS.find(o => o.key === selectedMetric) || METRIC_OPTIONS[0];
+  const activeMetricConfig = allMetricOptions.find(o => o.key === selectedMetric) || allMetricOptions[0];
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -217,7 +253,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
           onChange={(e) => setSelectedMetric(e.target.value as MetricKey)}
           className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-sm rounded-lg focus:ring-brand-500 focus:border-brand-500 block p-2 w-full sm:w-auto"
         >
-          {METRIC_OPTIONS.map(opt => (
+          {allMetricOptions.map(opt => (
             <option key={opt.key} value={opt.key}>{opt.label}</option>
           ))}
         </select>

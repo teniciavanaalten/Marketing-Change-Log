@@ -1,3 +1,4 @@
+
 export type Platform = 'linkedin' | 'google' | 'meta';
 
 export enum ChangeType {
@@ -39,6 +40,7 @@ export interface DailyMetric {
   spend: number;
   conversions: number;
   importId?: string; // Links metric to a specific import batch
+  customMetrics?: Record<string, number>; // Dynamic key-value for user defined metrics
 }
 
 // Calculated metrics for display
@@ -54,7 +56,14 @@ export interface DateRange {
   end: string;
 }
 
-export type MetricKey = 'impressions' | 'clicks' | 'spend' | 'ctr' | 'cpc' | 'conversions' | 'conversionRate';
+export type MetricKey = string; // Changed from union to string to support custom keys
+
+export interface MetricDefinition {
+  key: string;
+  label: string;
+  format: 'number' | 'currency' | 'percent';
+  aggregation: 'sum' | 'average';
+}
 
 export interface User {
   id: string;

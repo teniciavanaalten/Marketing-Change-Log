@@ -10,12 +10,13 @@ import { AddChangeModal } from './components/Dashboard/AddChangeModal';
 import { CsvUploader } from './components/Dashboard/CsvUploader';
 import { DataManagementModal } from './components/Dashboard/DataManagementModal';
 import { CampaignManagerModal } from './components/Dashboard/CampaignManagerModal';
+import { MetricManagerModal } from './components/Dashboard/MetricManagerModal';
 import { dataService } from './services/dataService';
 import { ChangeLog, DailyMetric, ImportRecord, Campaign } from './types';
 import { Plus, Settings } from 'lucide-react';
 
 const Dashboard = () => {
-  const { selectedPlatform, dateRange } = useApp();
+  const { selectedPlatform, dateRange, addCustomMetric, removeCustomMetric, customMetrics } = useApp();
   const [metrics, setMetrics] = useState<DailyMetric[]>([]);
   const [logs, setLogs] = useState<ChangeLog[]>([]);
   const [imports, setImports] = useState<ImportRecord[]>([]);
@@ -25,6 +26,7 @@ const Dashboard = () => {
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
+  const [isMetricModalOpen, setIsMetricModalOpen] = useState(false);
 
   // Fetch data when params change
   const refreshData = async () => {
@@ -93,9 +95,24 @@ const Dashboard = () => {
           </Card>
         </div>
         <div className="space-y-6">
-          <Card title="Data Import">
+          <Card 
+            title="Data Import" 
+            action={
+              <button 
+                onClick={() => setIsMetricModalOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-brand-500 transition-colors"
+                title="Add Custom Metrics"
+              >
+                <Settings size={14} />
+                <span>Configure Metrics</span>
+              </button>
+            }
+          >
              <div className="space-y-4">
-               <CsvUploader platform={selectedPlatform} onImport={handleImportMetrics} />
+               <CsvUploader 
+                 platform={selectedPlatform} 
+                 onImport={handleImportMetrics} 
+               />
                
                <div className="flex items-center justify-between text-xs text-slate-400">
                  <span>Recent Imports: {imports.length}</span>
@@ -114,6 +131,14 @@ const Dashboard = () => {
                  <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Clicks</code>,{' '}
                  <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Spend</code>,{' '}
                  <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Conversions</code>
+                 {customMetrics.length > 0 && (
+                   <>
+                      <span className="mx-1">+</span>
+                      {customMetrics.map(m => (
+                        <span key={m.key} className="mr-1"><code className="bg-brand-50 dark:bg-brand-900/20 text-brand-600 px-1 py-0.5 rounded">{m.label}</code></span>
+                      ))}
+                   </>
+                 )}
                </div>
              </div>
           </Card>
@@ -181,6 +206,14 @@ const Dashboard = () => {
         platform={selectedPlatform}
         onAdd={handleAddCampaign}
         onDelete={handleDeleteCampaign}
+      />
+
+      <MetricManagerModal 
+        isOpen={isMetricModalOpen}
+        onClose={() => setIsMetricModalOpen(false)}
+        customMetrics={customMetrics}
+        onAdd={addCustomMetric}
+        onRemove={removeCustomMetric}
       />
     </div>
   );

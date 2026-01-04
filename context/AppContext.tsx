@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Platform, DateRange, User } from '../types';
+import { Platform, DateRange, User, MetricDefinition } from '../types';
 
 interface AppContextType {
   theme: 'light' | 'dark';
@@ -11,6 +11,9 @@ interface AppContextType {
   user: User | null;
   login: () => void;
   logout: () => void;
+  customMetrics: MetricDefinition[];
+  addCustomMetric: (metric: MetricDefinition) => void;
+  removeCustomMetric: (key: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -19,6 +22,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('linkedin');
   const [user, setUser] = useState<User | null>({ id: '1', name: 'Demo Marketer', email: 'demo@marketer.io' });
+  const [customMetrics, setCustomMetrics] = useState<MetricDefinition[]>([]);
   
   // Default date range: Last 30 days
   const today = new Date();
@@ -50,6 +54,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   };
 
+  const addCustomMetric = (metric: MetricDefinition) => {
+    setCustomMetrics(prev => [...prev, metric]);
+  };
+
+  const removeCustomMetric = (key: string) => {
+    setCustomMetrics(prev => prev.filter(m => m.key !== key));
+  };
+
   return (
     <AppContext.Provider value={{
       theme,
@@ -60,7 +72,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       setDateRange,
       user,
       login,
-      logout
+      logout,
+      customMetrics,
+      addCustomMetric,
+      removeCustomMetric
     }}>
       {children}
     </AppContext.Provider>
