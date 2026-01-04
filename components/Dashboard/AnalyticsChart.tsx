@@ -7,7 +7,6 @@ import {
   CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
-  ReferenceLine,
   Area
 } from 'recharts';
 import { DailyMetric, ChangeLog, MetricKey } from '../../types';
@@ -20,43 +19,118 @@ interface AnalyticsChartProps {
   isLoading: boolean;
 }
 
+type Granularity = 'daily' | 'weekly' | 'monthly';
+
 export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeLogs, isLoading }) => {
   const { theme } = useApp();
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('clicks');
+  const [granularity, setGranularity] = useState<Granularity>('daily');
 
-  // Pre-process data: Compute CTR/CPC if needed and merge
+  // Helper to get start of week (Monday)
+  const getStartOfWeek = (d: Date) => {
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    return new Date(date.setDate(diff));
+  };
+
+  const getStartOfMonth = (d: Date) => {
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  };
+
   const chartData = useMemo(() => {
-    return metrics.map(m => {
-      const ctr = m.impressions > 0 ? (m.clicks / m.impressions) * 100 : 0;
-      const cpc = m.clicks > 0 ? m.spend / m.clicks : 0;
-      const conversionRate = m.clicks > 0 ? (m.conversions / m.clicks) * 100 : 0;
+    if (metrics.length === 0) return [];
 
-      // Find if there is a change log on this day
-      const change = changeLogs.find(log => log.date === m.date);
+    // 1. Group metrics based on granularity
+    const groupedData = new Map<string, {
+      dateObj: Date;
+      impressions: number;
+      clicks: number;
+      spend: number;
+      conversions: number;
+      changeLogs: ChangeLog[];
+    }>();
 
+    metrics.forEach(m => {
       const dateObj = new Date(m.date);
+      let key = m.date; // Default daily key (YYYY-MM-DD)
+      let groupDate = dateObj;
 
-      return {
-        ...m,
-        ctr: parseFloat(ctr.toFixed(2)),
-        cpc: parseFloat(cpc.toFixed(2)),
-        conversionRate: parseFloat(conversionRate.toFixed(2)),
-        changeLog: change, // Attach change log to data point
-        // Format: 24 Oct 23
-        displayDate: dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }),
-        // Full format for tooltip: 24 Oct 2023
-        fullDate: dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-      };
+      if (granularity === 'weekly') {
+        const startOfWeek = getStartOfWeek(dateObj);
+        key = startOfWeek.toISOString().split('T')[0];
+        groupDate = startOfWeek;
+      } else if (granularity === 'monthly') {
+        const startOfMonth = getStartOfMonth(dateObj);
+        key = startOfMonth.toISOString().split('T')[0];
+        groupDate = startOfMonth;
+      }
+
+      if (!groupedData.has(key)) {
+        groupedData.set(key, {
+          dateObj: groupDate,
+          impressions: 0,
+          clicks: 0,
+          spend: 0,
+          conversions: 0,
+          changeLogs: []
+        });
+      }
+
+      const entry = groupedData.get(key)!;
+      entry.impressions += m.impressions;
+      entry.clicks += m.clicks;
+      entry.spend += m.spend;
+      entry.conversions += m.conversions;
+
+      // Find logs for this specific day and add to group
+      const daysLogs = changeLogs.filter(l => l.date === m.date);
+      entry.changeLogs.push(...daysLogs);
     });
-  }, [metrics, changeLogs]);
+
+    // 2. Convert to array and calculate rates
+    const result = Array.from(groupedData.values())
+      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())
+      .map(entry => {
+        const ctr = entry.impressions > 0 ? (entry.clicks / entry.impressions) * 100 : 0;
+        const cpc = entry.clicks > 0 ? entry.spend / entry.clicks : 0;
+        const conversionRate = entry.clicks > 0 ? (entry.conversions / entry.clicks) * 100 : 0;
+
+        // Date formatting based on granularity
+        let displayDate = '';
+        let fullDate = '';
+
+        if (granularity === 'monthly') {
+           displayDate = entry.dateObj.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }); // Oct 23
+           fullDate = entry.dateObj.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        } else if (granularity === 'weekly') {
+           displayDate = entry.dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); // 24 Oct
+           fullDate = `Week of ${entry.dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`;
+        } else {
+           displayDate = entry.dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' });
+           fullDate = entry.dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        return {
+          ...entry,
+          ctr: parseFloat(ctr.toFixed(2)),
+          cpc: parseFloat(cpc.toFixed(2)),
+          conversionRate: parseFloat(conversionRate.toFixed(2)),
+          displayDate,
+          fullDate,
+          hasChange: entry.changeLogs.length > 0
+        };
+      });
+
+    return result;
+  }, [metrics, changeLogs, granularity]);
 
   const activeMetricConfig = METRIC_OPTIONS.find(o => o.key === selectedMetric) || METRIC_OPTIONS[0];
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
-      const hasChange = !!data.changeLog;
-
+      
       return (
         <div className="bg-white dark:bg-slate-800 p-4 border border-slate-200 dark:border-slate-700 shadow-xl rounded-lg max-w-xs z-50">
           <p className="text-slate-500 dark:text-slate-400 text-xs mb-1">{data.fullDate}</p>
@@ -67,18 +141,25 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
             <span className="text-xs font-normal text-slate-500 ml-1">{activeMetricConfig.label}</span>
           </p>
 
-          {hasChange && (
+          {data.hasChange && (
             <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-2 h-2 rounded-full bg-brand-500"></div>
-                <span className="text-xs font-bold text-brand-500 uppercase">{data.changeLog.changeType}</span>
+              <p className="text-xs font-bold text-slate-500 uppercase mb-2">
+                {data.changeLogs.length} Change{data.changeLogs.length !== 1 ? 's' : ''}
+              </p>
+              <div className="space-y-2 max-h-32 overflow-y-auto">
+                {data.changeLogs.map((log: ChangeLog, idx: number) => (
+                   <div key={idx} className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-brand-500"></div>
+                        <span className="text-xs font-semibold text-brand-500">{log.changeType}</span>
+                        {granularity !== 'daily' && <span className="text-[10px] text-slate-400">{new Date(log.date).getDate()}th</span>}
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 ml-3.5 line-clamp-1">
+                        {log.campaignName}
+                      </p>
+                   </div>
+                ))}
               </div>
-              <p className="text-xs text-slate-700 dark:text-slate-300 font-medium">
-                {data.changeLog.campaignName}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
-                {data.changeLog.description}
-              </p>
             </div>
           )}
         </div>
@@ -87,10 +168,9 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
     return null;
   };
 
-  // Custom Dot to render when there is a change log
   const CustomDot = (props: any) => {
     const { cx, cy, payload } = props;
-    if (payload.changeLog) {
+    if (payload.hasChange) {
       return (
         <g>
           <circle cx={cx} cy={cy} r={6} fill={BRAND_COLOR} stroke="white" strokeWidth={2} />
@@ -111,11 +191,31 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
 
   return (
     <div className="w-full">
-      <div className="flex justify-end mb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+        {/* Granularity Toggle */}
+        <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-lg flex items-center">
+           {(['daily', 'weekly', 'monthly'] as Granularity[]).map((g) => (
+             <button
+               key={g}
+               onClick={() => setGranularity(g)}
+               className={`
+                 px-3 py-1.5 text-xs font-medium rounded-md capitalize transition-all
+                 ${granularity === g 
+                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                   : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                 }
+               `}
+             >
+               {g}
+             </button>
+           ))}
+        </div>
+
+        {/* Metric Selector */}
         <select
           value={selectedMetric}
           onChange={(e) => setSelectedMetric(e.target.value as MetricKey)}
-          className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-sm rounded-lg focus:ring-brand-500 focus:border-brand-500 block p-2"
+          className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 text-sm rounded-lg focus:ring-brand-500 focus:border-brand-500 block p-2 w-full sm:w-auto"
         >
           {METRIC_OPTIONS.map(opt => (
             <option key={opt.key} value={opt.key}>{opt.label}</option>
