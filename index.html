@@ -11,6 +11,20 @@
         theme: {
           extend: {
             colors: {
+              // Overriding slate to be a neutral "True Dark" palette
+              slate: {
+                50: '#fafafa',
+                100: '#f4f4f5',
+                200: '#e4e4e7',
+                300: '#d4d4d8',
+                400: '#a1a1aa',
+                500: '#71717a',
+                600: '#52525b',
+                700: '#27272a', // Dark borders
+                800: '#121212', // Card/Sidebar background
+                900: '#000000', // Main background
+                950: '#000000',
+              },
               brand: {
                 50: '#fdf2f4',
                 100: '#fce7ea',
@@ -42,7 +56,7 @@
         border-radius: 3px;
       }
       .dark ::-webkit-scrollbar-thumb {
-        background: #475569;
+        background: #3f3f46;
       }
     </style>
   <script type="importmap">

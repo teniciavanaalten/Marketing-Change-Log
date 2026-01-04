@@ -268,17 +268,17 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
                 <stop offset="95%" stopColor={BRAND_COLOR} stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#27272a' : '#e2e8f0'} vertical={false} />
             <XAxis 
               dataKey="displayDate" 
-              stroke={theme === 'dark' ? '#94a3b8' : '#64748b'} 
+              stroke={theme === 'dark' ? '#71717a' : '#64748b'} 
               fontSize={12} 
               tickLine={false}
               axisLine={false}
               minTickGap={30}
             />
             <YAxis 
-              stroke={theme === 'dark' ? '#94a3b8' : '#64748b'} 
+              stroke={theme === 'dark' ? '#71717a' : '#64748b'} 
               fontSize={12} 
               tickLine={false}
               axisLine={false}
