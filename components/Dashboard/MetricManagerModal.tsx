@@ -1,23 +1,27 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { X, Plus, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '../UI/Button';
-import { MetricDefinition } from '../../types';
+import { MetricDefinition, Platform } from '../../types';
+import { useApp } from '../../context/AppContext';
 
 interface MetricManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  customMetrics: MetricDefinition[];
+  customMetrics: MetricDefinition[]; // This prop name is kept for compatibility but carries all metrics now
+  platform: Platform;
   onAdd: (metric: MetricDefinition) => void;
-  onRemove: (key: string) => void;
+  onRemove: (key: string, platform: Platform) => void;
 }
 
 export const MetricManagerModal: React.FC<MetricManagerModalProps> = ({
   isOpen,
   onClose,
-  customMetrics,
+  customMetrics: allMetrics, // Renaming internally for clarity
+  platform,
   onAdd,
   onRemove
 }) => {
+  const { resetMetrics } = useApp();
   const [newMetric, setNewMetric] = useState<{
     label: string;
     format: 'number' | 'currency' | 'percent';
@@ -30,6 +34,9 @@ export const MetricManagerModal: React.FC<MetricManagerModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Filter metrics for display
+  const platformMetrics = allMetrics.filter(m => m.platform === platform);
+
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMetric.label) return;
@@ -41,10 +48,18 @@ export const MetricManagerModal: React.FC<MetricManagerModalProps> = ({
       key,
       label: newMetric.label,
       format: newMetric.format,
-      aggregation: newMetric.aggregation
+      aggregation: newMetric.aggregation,
+      platform: platform,
+      isDerived: false
     });
 
     setNewMetric({ label: '', format: 'number', aggregation: 'sum' });
+  };
+
+  const handleReset = () => {
+    if (window.confirm(`Are you sure you want to reset ${platform} metrics to default?`)) {
+      resetMetrics(platform);
+    }
   };
 
   return (
@@ -56,7 +71,10 @@ export const MetricManagerModal: React.FC<MetricManagerModalProps> = ({
       
       <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Custom Metrics</h2>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Manage Metrics</h2>
+            <p className="text-xs text-slate-500 capitalize">{platform} Ads</p>
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
             <X size={20} />
           </button>
@@ -65,7 +83,7 @@ export const MetricManagerModal: React.FC<MetricManagerModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-6">
           {/* Add Form */}
           <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-slate-100 dark:border-slate-700">
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3">Add New Metric</h3>
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3">Add Custom {platform} Metric</h3>
             <form onSubmit={handleAdd} className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">
@@ -117,22 +135,35 @@ export const MetricManagerModal: React.FC<MetricManagerModalProps> = ({
 
           {/* List */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3">Active Custom Metrics</h3>
-            {customMetrics.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">No custom metrics added yet.</p>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Active Metrics ({platformMetrics.length})</h3>
+              <button 
+                onClick={handleReset}
+                className="text-xs text-brand-500 hover:text-brand-600 flex items-center gap-1"
+                type="button"
+              >
+                <RotateCcw size={12} /> Reset Defaults
+              </button>
+            </div>
+            
+            {platformMetrics.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No metrics configured. Add one or reset defaults.</p>
             ) : (
               <div className="space-y-2">
-                {customMetrics.map(metric => (
-                  <div key={metric.key} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                {platformMetrics.map(metric => (
+                  <div key={metric.key} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg group">
                     <div>
-                      <p className="text-sm font-medium text-slate-900 dark:text-white">{metric.label}</p>
+                      <div className="flex items-center gap-2">
+                         <p className="text-sm font-medium text-slate-900 dark:text-white">{metric.label}</p>
+                         {metric.isDerived && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1 rounded">Calc</span>}
+                      </div>
                       <div className="flex gap-2 text-[10px] text-slate-500 uppercase font-semibold">
                         <span className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">{metric.format}</span>
                         <span className="bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">{metric.aggregation}</span>
                       </div>
                     </div>
                     <button 
-                      onClick={() => onRemove(metric.key)}
+                      onClick={() => onRemove(metric.key, platform)}
                       className="p-2 text-slate-400 hover:text-red-500 transition-colors"
                       title="Remove Metric"
                     >

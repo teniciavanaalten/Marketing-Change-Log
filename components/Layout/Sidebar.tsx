@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { PLATFORMS } from '../../constants';
 import { 
   Linkedin, 
-  Search, // Using Search for Google 
+  Search, 
   Facebook, 
   LayoutDashboard,
   ChevronLeft,
   ChevronRight,
-  Menu
+  PlusCircle
 } from 'lucide-react';
 import { Platform } from '../../types';
+import { PlatformManagerModal } from '../Dashboard/PlatformManagerModal';
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -18,10 +18,13 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) => {
-  const { selectedPlatform, setSelectedPlatform } = useApp();
+  const { selectedPlatform, setSelectedPlatform, platforms } = useApp();
   const [collapsed, setCollapsed] = useState(false);
+  const [isManagerOpen, setIsManagerOpen] = useState(false);
 
-  const getIcon = (platformId: string) => {
+  const getIcon = (platformId: string, emoji?: string) => {
+    if (emoji) return <span className="text-lg leading-none">{emoji}</span>;
+
     switch(platformId) {
       case 'linkedin': return <Linkedin size={20} />;
       case 'google': return <Search size={20} />;
@@ -82,11 +85,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <div className={`text-xs font-semibold text-slate-400 uppercase mb-2 ${collapsed ? 'text-center' : 'px-2'}`}>
-            {collapsed ? 'Plats' : 'Platforms'}
+          <div className={`flex items-center justify-between text-xs font-semibold text-slate-400 uppercase mb-2 ${collapsed ? 'flex-col gap-2' : 'px-2'}`}>
+            <span>{collapsed ? 'Plats' : 'Platforms'}</span>
+            <button 
+              onClick={() => setIsManagerOpen(true)}
+              className="text-slate-400 hover:text-brand-500 transition-colors"
+              title="Manage Platforms"
+            >
+              <PlusCircle size={16} />
+            </button>
           </div>
           
-          {PLATFORMS.map((platform) => (
+          {platforms.map((platform) => (
             <button
               key={platform.id}
               onClick={() => handlePlatformSelect(platform.id)}
@@ -100,11 +110,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
               `}
               title={collapsed ? platform.label : undefined}
             >
-              {getIcon(platform.id)}
-              {!collapsed && <span className="font-medium">{platform.label}</span>}
+              {getIcon(platform.id, platform.emoji)}
+              {!collapsed && <span className="font-medium truncate">{platform.label}</span>}
               
               {selectedPlatform === platform.id && !collapsed && (
-                <div className="absolute right-2 w-1.5 h-1.5 rounded-full bg-brand-500"></div>
+                <div 
+                  className="absolute right-2 w-1.5 h-1.5 rounded-full" 
+                  style={{ backgroundColor: platform.color || '#e84661' }}
+                ></div>
               )}
             </button>
           ))}
@@ -125,6 +138,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
           </div>
         </div>
       </aside>
+
+      <PlatformManagerModal 
+        isOpen={isManagerOpen} 
+        onClose={() => setIsManagerOpen(false)} 
+      />
     </>
   );
 };

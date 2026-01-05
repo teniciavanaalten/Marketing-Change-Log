@@ -1,5 +1,12 @@
 
-export type Platform = 'linkedin' | 'google' | 'meta';
+export type Platform = string;
+
+export interface PlatformDefinition {
+  id: string;
+  label: string;
+  color: string;
+  emoji?: string;
+}
 
 export enum ChangeType {
   CREATE_AD = 'Create Ad',
@@ -56,13 +63,15 @@ export interface DateRange {
   end: string;
 }
 
-export type MetricKey = string; // Changed from union to string to support custom keys
+export type MetricKey = string;
 
 export interface MetricDefinition {
   key: string;
   label: string;
   format: 'number' | 'currency' | 'percent';
   aggregation: 'sum' | 'average';
+  platform: Platform;
+  isDerived?: boolean; // If true, this metric is calculated (e.g. CTR), not imported
 }
 
 export interface User {

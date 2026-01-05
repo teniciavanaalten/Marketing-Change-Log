@@ -11,7 +11,7 @@ interface CsvUploaderProps {
 
 export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { customMetrics } = useApp();
+  const { metricsConfig } = useApp();
   const [status, setStatus] = useState<'idle' | 'parsing' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
@@ -68,19 +68,28 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) 
         const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
         const getIndex = (keys: string[]) => headers.findIndex(h => keys.some(k => h === k || h.includes(k)));
         
+        // Always look for Date
         const dateIdx = getIndex(['date', 'day', 'time', 'period']);
-        const impIdx = getIndex(['impression', 'views', 'imps']);
-        const clicksIdx = getIndex(['click']);
-        const spendIdx = getIndex(['spend', 'cost', 'amount', 'avg. cpc']);
-        const convIdx = getIndex(['conversion', 'conv.']);
+        
+        // Get active non-derived metrics for this platform
+        const activeMetrics = metricsConfig.filter(m => m.platform === platform && !m.isDerived);
+        
+        // Map metric keys to CSV indices dynamically
+        const metricIndices = activeMetrics.map(m => {
+          // Heuristic for matching headers: try exact label, or key, or common synonyms
+          let searchTerms = [m.label.toLowerCase(), m.key.toLowerCase()];
+          if (m.key === 'impressions') searchTerms.push('views', 'imps', 'impr');
+          if (m.key === 'spend') searchTerms.push('cost', 'amount', 'avg. cpc'); // 'avg. cpc' sometimes header for cost column in weird CSVs, but be careful
+          if (m.key === 'conversions') searchTerms.push('conv', 'leads');
 
-        // Find indices for custom metrics
-        const customIndices = customMetrics.map(m => ({
-          key: m.key,
-          index: getIndex([m.label.toLowerCase()])
-        }));
+          return {
+            key: m.key,
+            index: getIndex(searchTerms)
+          };
+        });
 
-        const usePositions = dateIdx === -1 && impIdx === -1;
+        // Determine if date is in first column by default if not found
+        const useFirstColDate = dateIdx === -1;
 
         const newMetrics: DailyMetric[] = [];
         let skippedRows = 0;
@@ -89,7 +98,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) 
           const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
           if (cols.length < 2) continue;
 
-          let rawDate = usePositions ? cols[0] : cols[dateIdx];
+          let rawDate = useFirstColDate ? cols[0] : cols[dateIdx];
           const validDate = parseDate(rawDate);
 
           if (!validDate) {
@@ -102,24 +111,33 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) 
             return parseFloat(val.replace(/[^0-9.-]/g, '')) || 0;
           };
 
-          const metric: DailyMetric = {
+          // Build metric object dynamically
+          const metric: any = {
             date: validDate,
             platform,
-            impressions: parseNum(usePositions ? cols[1] : (impIdx > -1 ? cols[impIdx] : '0')),
-            clicks: parseNum(usePositions ? cols[2] : (clicksIdx > -1 ? cols[clicksIdx] : '0')),
-            spend: parseNum(usePositions ? cols[3] : (spendIdx > -1 ? cols[spendIdx] : '0')),
-            conversions: parseNum(usePositions ? cols[4] : (convIdx > -1 ? cols[convIdx] : '0')),
-            customMetrics: {}
+            customMetrics: {} // Initialize for safety
           };
 
-          // Extract Custom Metrics
-          customIndices.forEach(({ key, index }) => {
-            if (index > -1 && metric.customMetrics) {
-              metric.customMetrics[key] = parseNum(cols[index]);
+          // Standard storage keys for compatibility
+          // If the key is standard (spend, clicks, etc), store it at root
+          // Else store in customMetrics
+          metricIndices.forEach(({ key, index }) => {
+            const val = index > -1 ? parseNum(cols[index]) : 0;
+            
+            if (['impressions', 'clicks', 'spend', 'conversions'].includes(key)) {
+              metric[key] = val;
+            } else {
+              metric.customMetrics[key] = val;
             }
           });
 
-          newMetrics.push(metric);
+          // Ensure standard keys exist even if 0, to satisfy TypeScript/Interface
+          metric.impressions = metric.impressions || 0;
+          metric.clicks = metric.clicks || 0;
+          metric.spend = metric.spend || 0;
+          metric.conversions = metric.conversions || 0;
+
+          newMetrics.push(metric as DailyMetric);
         }
 
         if (newMetrics.length === 0) {

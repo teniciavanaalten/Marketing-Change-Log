@@ -16,7 +16,7 @@ import { ChangeLog, DailyMetric, ImportRecord, Campaign } from './types';
 import { Plus, Settings } from 'lucide-react';
 
 const Dashboard = () => {
-  const { selectedPlatform, dateRange, addCustomMetric, removeCustomMetric, customMetrics } = useApp();
+  const { selectedPlatform, dateRange, addMetric, removeMetric, metricsConfig } = useApp();
   const [metrics, setMetrics] = useState<DailyMetric[]>([]);
   const [logs, setLogs] = useState<ChangeLog[]>([]);
   const [imports, setImports] = useState<ImportRecord[]>([]);
@@ -85,6 +85,10 @@ const Dashboard = () => {
     setCampaigns(prev => prev.filter(c => c.id !== id));
   };
 
+  // Filter metrics for display in the uploader hint
+  // Only show non-derived ones (imported from CSV)
+  const activeMetrics = metricsConfig.filter(m => m.platform === selectedPlatform && !m.isDerived);
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Top Row: Chart & Import */}
@@ -101,7 +105,7 @@ const Dashboard = () => {
               <button 
                 onClick={() => setIsMetricModalOpen(true)}
                 className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-brand-500 transition-colors"
-                title="Add Custom Metrics"
+                title="Manage Metrics"
               >
                 <Settings size={14} />
                 <span>Configure Metrics</span>
@@ -125,20 +129,15 @@ const Dashboard = () => {
                </div>
 
                <div className="text-xs text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-700">
-                 <p className="mb-1">Supported CSV columns:</p>
-                 <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Date</code>,{' '}
-                 <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Impressions</code>,{' '}
-                 <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Clicks</code>,{' '}
-                 <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Spend</code>,{' '}
-                 <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Conversions</code>
-                 {customMetrics.length > 0 && (
-                   <>
-                      <span className="mx-1">+</span>
-                      {customMetrics.map(m => (
-                        <span key={m.key} className="mr-1"><code className="bg-brand-50 dark:bg-brand-900/20 text-brand-600 px-1 py-0.5 rounded">{m.label}</code></span>
-                      ))}
-                   </>
-                 )}
+                 <p className="mb-1">Active CSV Columns ({selectedPlatform}):</p>
+                 <div className="flex flex-wrap gap-1.5">
+                   <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Date</code>
+                   {activeMetrics.map(m => (
+                     <code key={m.key} className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-600 dark:text-slate-300">
+                       {m.label}
+                     </code>
+                   ))}
+                 </div>
                </div>
              </div>
           </Card>
@@ -211,9 +210,10 @@ const Dashboard = () => {
       <MetricManagerModal 
         isOpen={isMetricModalOpen}
         onClose={() => setIsMetricModalOpen(false)}
-        customMetrics={customMetrics}
-        onAdd={addCustomMetric}
-        onRemove={removeCustomMetric}
+        customMetrics={metricsConfig} // Pass full config
+        platform={selectedPlatform}
+        onAdd={addMetric}
+        onRemove={removeMetric}
       />
     </div>
   );

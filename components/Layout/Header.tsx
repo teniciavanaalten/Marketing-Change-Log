@@ -8,9 +8,10 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
-  const { theme, toggleTheme, selectedPlatform } = useApp();
+  const { theme, toggleTheme, selectedPlatform, platforms } = useApp();
   
-  const platformName = selectedPlatform.charAt(0).toUpperCase() + selectedPlatform.slice(1) + ' Ads';
+  const currentPlatform = platforms.find(p => p.id === selectedPlatform);
+  const platformName = currentPlatform ? currentPlatform.label : 'Dashboard';
 
   return (
     <header className="sticky top-0 z-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 px-6 py-4">
@@ -25,7 +26,8 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           </button>
           
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              {currentPlatform?.emoji && <span>{currentPlatform.emoji}</span>}
               {platformName}
             </h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 hidden md:block">
