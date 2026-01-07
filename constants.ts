@@ -22,15 +22,13 @@ export const DEFAULT_PLATFORMS: PlatformDefinition[] = [
 ];
 
 export const DEFAULT_CHANGE_TYPES_TEMPLATE: Omit<ChangeTypeDefinition, 'platform'>[] = [
-  { id: 'create-ad', label: 'Create Ad' },
-  { id: 'delete-ad', label: 'Delete Ad' },
-  { id: 'pause-campaign', label: 'Pause Campaign' },
-  { id: 'enable-campaign', label: 'Enable Campaign' },
-  { id: 'budget-change', label: 'Budget Change' },
-  { id: 'bid-strategy', label: 'Bid Strategy' },
-  { id: 'targeting', label: 'Targeting Update' },
-  { id: 'creative', label: 'Creative Update' },
-  { id: 'custom', label: 'Custom' },
+  { id: 'ads-added', label: 'Ads added' },
+  { id: 'ads-deleted', label: 'Ads deleted' },
+  { id: 'campaign-paused', label: 'Campaign paused' },
+  { id: 'budget-changed', label: 'Budget changed' },
+  { id: 'bid-strategy-changed', label: 'Bid strategy changed' },
+  { id: 'targeting-updated', label: 'Targeting updated' },
+  { id: 'ad-copy-changed', label: 'Ad copy changed' },
 ];
 
 export const MOCK_CAMPAIGNS = [
