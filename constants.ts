@@ -1,5 +1,5 @@
 
-import { ChangeType, MetricDefinition, PlatformDefinition } from "./types";
+import { MetricDefinition, PlatformDefinition, ChangeTypeDefinition } from "./types";
 
 export const BRAND_COLOR = '#e84661';
 
@@ -21,7 +21,17 @@ export const DEFAULT_PLATFORMS: PlatformDefinition[] = [
   { id: 'meta', label: 'Meta Ads', color: '#1877F2' },
 ];
 
-export const CHANGE_TYPES = Object.values(ChangeType);
+export const DEFAULT_CHANGE_TYPES_TEMPLATE: Omit<ChangeTypeDefinition, 'platform'>[] = [
+  { id: 'create-ad', label: 'Create Ad' },
+  { id: 'delete-ad', label: 'Delete Ad' },
+  { id: 'pause-campaign', label: 'Pause Campaign' },
+  { id: 'enable-campaign', label: 'Enable Campaign' },
+  { id: 'budget-change', label: 'Budget Change' },
+  { id: 'bid-strategy', label: 'Bid Strategy' },
+  { id: 'targeting', label: 'Targeting Update' },
+  { id: 'creative', label: 'Creative Update' },
+  { id: 'custom', label: 'Custom' },
+];
 
 export const MOCK_CAMPAIGNS = [
   "Q3 Lead Gen - USA",

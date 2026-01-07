@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, Plus, Settings } from 'lucide-react';
-import { ChangeType, ChangeLog, Platform, Campaign } from '../../types';
-import { CHANGE_TYPES } from '../../constants';
+import { ChangeLog, Platform, Campaign, ChangeTypeDefinition } from '../../types';
 import { Button } from '../UI/Button';
 
 interface AddChangeModalProps {
@@ -11,19 +10,23 @@ interface AddChangeModalProps {
   platform: Platform;
   campaigns: Campaign[];
   onManageCampaigns: () => void;
+  changeTypes: ChangeTypeDefinition[];
+  onManageChangeTypes: () => void;
 }
 
-export const AddChangeModal: React.FC<AddChangeModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  onSubmit, 
+export const AddChangeModal: React.FC<AddChangeModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
   platform,
   campaigns,
-  onManageCampaigns
+  onManageCampaigns,
+  changeTypes,
+  onManageChangeTypes
 }) => {
   const [formData, setFormData] = useState({
     campaignName: '',
-    changeType: ChangeType.BUDGET_CHANGE,
+    changeType: '',
     description: '',
     date: new Date().toISOString().split('T')[0],
     tags: ''
@@ -45,7 +48,7 @@ export const AddChangeModal: React.FC<AddChangeModalProps> = ({
     // Reset form
     setFormData({
       campaignName: '',
-      changeType: ChangeType.BUDGET_CHANGE,
+      changeType: changeTypes.length > 0 ? changeTypes[0].label : '',
       description: '',
       date: new Date().toISOString().split('T')[0],
       tags: ''
@@ -55,7 +58,7 @@ export const AddChangeModal: React.FC<AddChangeModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={onClose}
       />
@@ -73,73 +76,87 @@ export const AddChangeModal: React.FC<AddChangeModalProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Date</label>
-              <input 
+              <input
                 type="date"
                 required
                 value={formData.date}
-                onChange={e => setFormData({...formData, date: e.target.value})}
+                onChange={e => setFormData({ ...formData, date: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Type</label>
-              <select 
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-xs font-medium text-slate-500">Type</label>
+                <button
+                  type="button"
+                  onClick={onManageChangeTypes}
+                  className="text-[10px] text-brand-500 hover:underline flex items-center gap-1 font-medium"
+                >
+                  <Settings size={10} /> Manage List
+                </button>
+              </div>
+              <select
                 value={formData.changeType}
-                onChange={e => setFormData({...formData, changeType: e.target.value as ChangeType})}
+                onChange={e => setFormData({ ...formData, changeType: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                required
               >
-                {CHANGE_TYPES.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
+                {changeTypes.length === 0 ? (
+                  <option value="">No change types available</option>
+                ) : (
+                  changeTypes.map(ct => (
+                    <option key={ct.id} value={ct.label}>{ct.label}</option>
+                  ))
+                )}
               </select>
             </div>
           </div>
 
           <div>
-             <div className="flex justify-between items-center mb-1">
-                <label className="block text-xs font-medium text-slate-500">Campaign</label>
-                <button 
-                  type="button" 
-                  onClick={onManageCampaigns}
-                  className="text-[10px] text-brand-500 hover:underline flex items-center gap-1 font-medium"
-                >
-                  <Settings size={10} /> Manage List
-                </button>
-             </div>
-             <input 
-                type="text"
-                list="campaigns-list"
-                required
-                placeholder="e.g. Summer Sale 2024"
-                value={formData.campaignName}
-                onChange={e => setFormData({...formData, campaignName: e.target.value})}
-                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
-                autoComplete="off"
-             />
-             <datalist id="campaigns-list">
-                {campaigns.map(c => <option key={c.id} value={c.name} />)}
-             </datalist>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-medium text-slate-500">Campaign</label>
+              <button
+                type="button"
+                onClick={onManageCampaigns}
+                className="text-[10px] text-brand-500 hover:underline flex items-center gap-1 font-medium"
+              >
+                <Settings size={10} /> Manage List
+              </button>
+            </div>
+            <input
+              type="text"
+              list="campaigns-list"
+              required
+              placeholder="e.g. Summer Sale 2024"
+              value={formData.campaignName}
+              onChange={e => setFormData({ ...formData, campaignName: e.target.value })}
+              className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+              autoComplete="off"
+            />
+            <datalist id="campaigns-list">
+              {campaigns.map(c => <option key={c.id} value={c.name} />)}
+            </datalist>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Description</label>
-            <textarea 
+            <textarea
               required
               rows={3}
               placeholder="What specifically changed? (e.g. Increased daily budget to $500)"
               value={formData.description}
-              onChange={e => setFormData({...formData, description: e.target.value})}
+              onChange={e => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Tags (comma separated)</label>
-            <input 
+            <input
               type="text"
               placeholder="budget, scale, optimization"
               value={formData.tags}
-              onChange={e => setFormData({...formData, tags: e.target.value})}
+              onChange={e => setFormData({ ...formData, tags: e.target.value })}
               className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
             />
           </div>

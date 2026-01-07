@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Platform, DateRange, User, MetricDefinition, PlatformDefinition, Campaign } from '../types';
-import { DEFAULT_METRICS_TEMPLATE, DEFAULT_PLATFORMS } from '../constants';
+import { Platform, DateRange, User, MetricDefinition, PlatformDefinition, Campaign, ChangeTypeDefinition } from '../types';
+import { DEFAULT_METRICS_TEMPLATE, DEFAULT_PLATFORMS, DEFAULT_CHANGE_TYPES_TEMPLATE } from '../constants';
 import { dataService } from '../services/dataService';
 
 interface AppContextType {
@@ -20,10 +20,14 @@ interface AppContextType {
   user: User | null;
   login: () => void;
   logout: () => void;
-  metricsConfig: MetricDefinition[]; 
+  metricsConfig: MetricDefinition[];
   addMetric: (metric: MetricDefinition) => void;
   removeMetric: (key: string, platform: Platform) => void;
   resetMetrics: (platform: Platform) => void;
+  changeTypesConfig: ChangeTypeDefinition[];
+  addChangeType: (changeType: ChangeTypeDefinition) => void;
+  removeChangeType: (id: string, platform: Platform) => void;
+  resetChangeTypes: (platform: Platform) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -35,20 +39,27 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [user, setUser] = useState<User | null>({ id: '1', name: 'Demo Marketer', email: 'demo@marketer.io' });
-  
+
   // Initialize metrics with defaults for ALL default platforms
   // Note: For custom platforms added later, we add metrics dynamically
   const [metricsConfig, setMetricsConfig] = useState<MetricDefinition[]>(() => {
-    return DEFAULT_PLATFORMS.flatMap(p => 
+    return DEFAULT_PLATFORMS.flatMap(p =>
       DEFAULT_METRICS_TEMPLATE.map(m => ({ ...m, platform: p.id }))
     );
   });
-  
+
+  // Initialize change types with defaults for ALL default platforms
+  const [changeTypesConfig, setChangeTypesConfig] = useState<ChangeTypeDefinition[]>(() => {
+    return DEFAULT_PLATFORMS.flatMap(p =>
+      DEFAULT_CHANGE_TYPES_TEMPLATE.map(ct => ({ ...ct, platform: p.id }))
+    );
+  });
+
   // Default date range: Last 30 days
   const today = new Date();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(today.getDate() - 30);
-  
+
   const [dateRange, setDateRange] = useState<DateRange>({
     start: thirtyDaysAgo.toISOString().split('T')[0],
     end: today.toISOString().split('T')[0]
@@ -85,30 +96,30 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       // Let's change this: `campaigns` in context will hold campaigns for the SELECTED platform 
       // OR we change dataService to return all.
       // Be careful. unique IDs across platforms?
-      
+
       // Let's just fetch for the selected platform for now to preserve existing logic flow,
       // and maybe Sidebar only shows campaigns for the *active* platform?
       // "When a platform is expanded..." - usually implies accordion.
       // If I expand LinkedIn, I see LinkedIn campaigns. 
       // If I expand Facebook, I see Facebook campaigns.
       // So I might need all campaigns loaded.
-      
+
       // Let's iterate all platforms to get all campaigns?
       // That might be expensive.
       // Let's just store "all campaigns" in a flat list in context?
-      
+
       // Temporary solution: Fetch for selected platform, update that list.
       // Wait, if I change platform, I lose the others?
       // If I want to render them in sidebar, I need them.
-      
+
       // Let's make `refreshCampaigns` fetch for the *selected* platform and maybe we only show them for the selected one in Sidebar?
       // Plan says: "When a platform is expanded: Show Overview link... Show list of Campaigns".
       // This implies we could fetch when expanded.
-      
+
       // Let's start by just fetching for ALL platforms effectively?
       // Or just fetch for current.
       const all: Campaign[] = [];
-      for(const p of platforms) {
+      for (const p of platforms) {
         const c = await dataService.getCampaigns(p.id);
         all.push(...c);
       }
@@ -137,11 +148,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const addPlatform = (def: Omit<PlatformDefinition, 'id'>) => {
     const id = def.label.toLowerCase().trim().replace(/[^a-z0-9]/g, '-');
     const newPlatform = { ...def, id };
-    
+
     setPlatforms(prev => [...prev, newPlatform]);
-    
+
     setMetricsConfig(prev => {
       const defaults = DEFAULT_METRICS_TEMPLATE.map(m => ({ ...m, platform: id }));
+      return [...prev, ...defaults];
+    });
+
+    setChangeTypesConfig(prev => {
+      const defaults = DEFAULT_CHANGE_TYPES_TEMPLATE.map(ct => ({ ...ct, platform: id }));
       return [...prev, ...defaults];
     });
 
@@ -153,13 +169,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     if (platforms.length <= 1) return;
 
     setPlatforms(prev => prev.filter(p => p.id !== id));
-    
+    setMetricsConfig(prev => prev.filter(m => m.platform !== id));
+    setChangeTypesConfig(prev => prev.filter(ct => ct.platform !== id));
+
     if (selectedPlatform === id) {
-       const remaining = platforms.filter(p => p.id !== id);
-       if (remaining.length > 0) {
-         setSelectedPlatform(remaining[0].id);
-         setSelectedCampaignId(null);
-       }
+      const remaining = platforms.filter(p => p.id !== id);
+      if (remaining.length > 0) {
+        setSelectedPlatform(remaining[0].id);
+        setSelectedCampaignId(null);
+      }
     }
   };
 
@@ -179,6 +197,26 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setMetricsConfig(prev => {
       const others = prev.filter(m => m.platform !== platform);
       const defaults = DEFAULT_METRICS_TEMPLATE.map(m => ({ ...m, platform }));
+      return [...others, ...defaults];
+    });
+  };
+
+  const addChangeType = (changeType: ChangeTypeDefinition) => {
+    setChangeTypesConfig(prev => {
+      const exists = prev.some(ct => ct.id === changeType.id && ct.platform === changeType.platform);
+      if (exists) return prev;
+      return [...prev, changeType];
+    });
+  };
+
+  const removeChangeType = (id: string, platform: Platform) => {
+    setChangeTypesConfig(prev => prev.filter(ct => !(ct.id === id && ct.platform === platform)));
+  };
+
+  const resetChangeTypes = (platform: Platform) => {
+    setChangeTypesConfig(prev => {
+      const others = prev.filter(ct => ct.platform !== platform);
+      const defaults = DEFAULT_CHANGE_TYPES_TEMPLATE.map(ct => ({ ...ct, platform }));
       return [...others, ...defaults];
     });
   };
@@ -204,7 +242,11 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       metricsConfig,
       addMetric,
       removeMetric,
-      resetMetrics
+      resetMetrics,
+      changeTypesConfig,
+      addChangeType,
+      removeChangeType,
+      resetChangeTypes
     }}>
       {children}
     </AppContext.Provider>

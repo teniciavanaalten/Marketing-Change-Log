@@ -8,23 +8,17 @@ export interface PlatformDefinition {
   emoji?: string;
 }
 
-export enum ChangeType {
-  CREATE_AD = 'Create Ad',
-  DELETE_AD = 'Delete Ad',
-  PAUSE_CAMPAIGN = 'Pause Campaign',
-  ENABLE_CAMPAIGN = 'Enable Campaign',
-  BUDGET_CHANGE = 'Budget Change',
-  BID_STRATEGY = 'Bid Strategy',
-  TARGETING = 'Targeting Update',
-  CREATIVE = 'Creative Update',
-  CUSTOM = 'Custom',
+export interface ChangeTypeDefinition {
+  id: string;
+  label: string;
+  platform: Platform;
 }
 
 export interface ChangeLog {
   id: string;
   platform: Platform;
   campaignName: string;
-  changeType: ChangeType | string;
+  changeType: string;
   description: string;
   date: string; // ISO 8601 YYYY-MM-DD
   tags: string[];

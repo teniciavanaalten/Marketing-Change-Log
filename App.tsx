@@ -11,6 +11,7 @@ import { CsvUploader } from './components/Dashboard/CsvUploader';
 import { DataManagementModal } from './components/Dashboard/DataManagementModal';
 import { CampaignManagerModal } from './components/Dashboard/CampaignManagerModal';
 import { MetricManagerModal } from './components/Dashboard/MetricManagerModal';
+import { ChangeTypeManagerModal } from './components/Dashboard/ChangeTypeManagerModal';
 import { dataService } from './services/dataService';
 import { ChangeLog, DailyMetric, ImportRecord } from './types';
 import { Plus, Settings } from 'lucide-react';
@@ -24,7 +25,10 @@ const Dashboard = () => {
     metricsConfig,
     campaigns,
     selectedCampaignId,
-    refreshCampaigns
+    refreshCampaigns,
+    changeTypesConfig,
+    addChangeType,
+    removeChangeType
   } = useApp();
 
   const [metrics, setMetrics] = useState<DailyMetric[]>([]);
@@ -36,6 +40,7 @@ const Dashboard = () => {
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [isMetricModalOpen, setIsMetricModalOpen] = useState(false);
+  const [isChangeTypeModalOpen, setIsChangeTypeModalOpen] = useState(false);
 
   // Fetch data when params change
   const refreshData = async () => {
@@ -213,6 +218,11 @@ const Dashboard = () => {
           setIsLogModalOpen(false); // Close log modal
           setIsCampaignModalOpen(true); // Open campaign modal
         }}
+        changeTypes={changeTypesConfig.filter(ct => ct.platform === selectedPlatform)}
+        onManageChangeTypes={() => {
+          setIsLogModalOpen(false); // Close log modal
+          setIsChangeTypeModalOpen(true); // Open change type modal
+        }}
       />
 
       <DataManagementModal
@@ -238,6 +248,15 @@ const Dashboard = () => {
         platform={selectedPlatform}
         onAdd={addMetric}
         onRemove={removeMetric}
+      />
+
+      <ChangeTypeManagerModal
+        isOpen={isChangeTypeModalOpen}
+        onClose={() => setIsChangeTypeModalOpen(false)}
+        changeTypes={changeTypesConfig}
+        platform={selectedPlatform}
+        onAdd={addChangeType}
+        onRemove={removeChangeType}
       />
     </div>
   );
