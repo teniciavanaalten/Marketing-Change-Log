@@ -12,17 +12,26 @@ import { DataManagementModal } from './components/Dashboard/DataManagementModal'
 import { CampaignManagerModal } from './components/Dashboard/CampaignManagerModal';
 import { MetricManagerModal } from './components/Dashboard/MetricManagerModal';
 import { dataService } from './services/dataService';
-import { ChangeLog, DailyMetric, ImportRecord, Campaign } from './types';
+import { ChangeLog, DailyMetric, ImportRecord } from './types';
 import { Plus, Settings } from 'lucide-react';
 
 const Dashboard = () => {
-  const { selectedPlatform, dateRange, addMetric, removeMetric, metricsConfig } = useApp();
+  const {
+    selectedPlatform,
+    dateRange,
+    addMetric,
+    removeMetric,
+    metricsConfig,
+    campaigns,
+    selectedCampaignId,
+    refreshCampaigns
+  } = useApp();
+
   const [metrics, setMetrics] = useState<DailyMetric[]>([]);
   const [logs, setLogs] = useState<ChangeLog[]>([]);
   const [imports, setImports] = useState<ImportRecord[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
@@ -32,16 +41,14 @@ const Dashboard = () => {
   const refreshData = async () => {
     setLoading(true);
     try {
-      const [fetchedMetrics, fetchedLogs, fetchedImports, fetchedCampaigns] = await Promise.all([
+      const [fetchedMetrics, fetchedLogs, fetchedImports] = await Promise.all([
         dataService.getMetrics(selectedPlatform, dateRange.start, dateRange.end),
         dataService.getChangeLogs(selectedPlatform, dateRange.start, dateRange.end),
-        dataService.getImports(selectedPlatform),
-        dataService.getCampaigns(selectedPlatform)
+        dataService.getImports(selectedPlatform)
       ]);
       setMetrics(fetchedMetrics);
       setLogs(fetchedLogs);
       setImports(fetchedImports);
-      setCampaigns(fetchedCampaigns);
     } catch (error) {
       console.error("Failed to fetch data", error);
     } finally {
@@ -56,7 +63,7 @@ const Dashboard = () => {
   const handleAddLog = async (logData: any) => {
     const newLog = await dataService.addChangeLog(logData);
     if (newLog.date >= dateRange.start && newLog.date <= dateRange.end) {
-      setLogs(prev => [newLog, ...prev].sort((a,b) => b.date.localeCompare(a.date)));
+      setLogs(prev => [newLog, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
     }
   };
 
@@ -76,14 +83,27 @@ const Dashboard = () => {
   };
 
   const handleAddCampaign = async (name: string) => {
-    const newCampaign = await dataService.addCampaign(name, selectedPlatform);
-    setCampaigns(prev => [...prev, newCampaign]);
+    await dataService.addCampaign(name, selectedPlatform);
+    await refreshCampaigns(); // Update global context
   };
 
   const handleDeleteCampaign = async (id: string) => {
     await dataService.deleteCampaign(id);
-    setCampaigns(prev => prev.filter(c => c.id !== id));
+    await refreshCampaigns(); // Update global context
   };
+
+  // Filter logic
+  const selectedCampaignName = selectedCampaignId
+    ? campaigns.find(c => c.id === selectedCampaignId)?.name
+    : null;
+
+  const filteredMetrics = selectedCampaignName
+    ? metrics.filter(m => m.campaignName === selectedCampaignName)
+    : metrics;
+
+  const filteredLogs = selectedCampaignName
+    ? logs.filter(l => l.campaignName === selectedCampaignName)
+    : logs;
 
   // Filter metrics for display in the uploader hint
   // Only show non-derived ones (imported from CSV)
@@ -94,15 +114,18 @@ const Dashboard = () => {
       {/* Top Row: Chart & Import */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3">
-          <Card title="Performance Impact" className="h-full">
-            <AnalyticsChart metrics={metrics} changeLogs={logs} isLoading={loading} />
+          <Card
+            title={selectedCampaignName ? `Performance: ${selectedCampaignName}` : "Performance Impact"}
+            className="h-full"
+          >
+            <AnalyticsChart metrics={filteredMetrics} changeLogs={filteredLogs} isLoading={loading} />
           </Card>
         </div>
         <div className="space-y-6">
-          <Card 
-            title="Data Import" 
+          <Card
+            title="Data Import"
             action={
-              <button 
+              <button
                 onClick={() => setIsMetricModalOpen(true)}
                 className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-brand-500 transition-colors"
                 title="Manage Metrics"
@@ -112,59 +135,60 @@ const Dashboard = () => {
               </button>
             }
           >
-             <div className="space-y-4">
-               <CsvUploader 
-                 platform={selectedPlatform} 
-                 onImport={handleImportMetrics} 
-               />
-               
-               <div className="flex items-center justify-between text-xs text-slate-400">
-                 <span>Recent Imports: {imports.length}</span>
-                 <button 
-                    onClick={() => setIsDataModalOpen(true)}
-                    className="text-brand-500 hover:text-brand-600 font-medium hover:underline"
-                 >
-                   Manage Data
-                 </button>
-               </div>
+            <div className="space-y-4">
+              <CsvUploader
+                platform={selectedPlatform}
+                onImport={handleImportMetrics}
+                defaultCampaignName={selectedCampaignName || undefined}
+              />
 
-               <div className="text-xs text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-700">
-                 <p className="mb-1">Active CSV Columns ({selectedPlatform}):</p>
-                 <div className="flex flex-wrap gap-1.5">
-                   <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Date</code>
-                   {activeMetrics.map(m => (
-                     <code key={m.key} className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-600 dark:text-slate-300">
-                       {m.label}
-                     </code>
-                   ))}
-                 </div>
-               </div>
-             </div>
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>Recent Imports: {imports.length}</span>
+                <button
+                  onClick={() => setIsDataModalOpen(true)}
+                  className="text-brand-500 hover:text-brand-600 font-medium hover:underline"
+                >
+                  Manage Data
+                </button>
+              </div>
+
+              <div className="text-xs text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-700">
+                <p className="mb-1">Active CSV Columns ({selectedPlatform}):</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded">Date</code>
+                  {activeMetrics.map(m => (
+                    <code key={m.key} className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-600 dark:text-slate-300">
+                      {m.label}
+                    </code>
+                  ))}
+                </div>
+              </div>
+            </div>
           </Card>
-          
+
           {/* Quick Stats Summary */}
-          {!loading && metrics.length > 0 && (
-             <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                   <p className="text-xs text-slate-500 uppercase">Total Spend</p>
-                   <p className="text-lg font-bold text-slate-900 dark:text-white">
-                     ${metrics.reduce((acc, curr) => acc + curr.spend, 0).toLocaleString()}
-                   </p>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                   <p className="text-xs text-slate-500 uppercase">Total Conv.</p>
-                   <p className="text-lg font-bold text-slate-900 dark:text-white">
-                     {metrics.reduce((acc, curr) => acc + curr.conversions, 0).toLocaleString()}
-                   </p>
-                </div>
-             </div>
+          {!loading && filteredMetrics.length > 0 && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                <p className="text-xs text-slate-500 uppercase">Total Spend</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-white">
+                  ${filteredMetrics.reduce((acc, curr) => acc + curr.spend, 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                <p className="text-xs text-slate-500 uppercase">Total Conv.</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-white">
+                  {filteredMetrics.reduce((acc, curr) => acc + curr.conversions, 0).toLocaleString()}
+                </p>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
       {/* Bottom Row: Change Log */}
-      <Card 
-        title="Change Log" 
+      <Card
+        title={selectedCampaignName ? `Change Log: ${selectedCampaignName}` : "Change Log"}
         action={
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => setIsCampaignModalOpen(true)} className="hidden sm:flex">
@@ -176,29 +200,29 @@ const Dashboard = () => {
           </div>
         }
       >
-        <ChangeLogTable logs={logs} onDelete={handleDeleteLog} isLoading={loading} />
+        <ChangeLogTable logs={filteredLogs} onDelete={handleDeleteLog} isLoading={loading} />
       </Card>
 
-      <AddChangeModal 
-        isOpen={isLogModalOpen} 
-        onClose={() => setIsLogModalOpen(false)} 
+      <AddChangeModal
+        isOpen={isLogModalOpen}
+        onClose={() => setIsLogModalOpen(false)}
         onSubmit={handleAddLog}
         platform={selectedPlatform}
-        campaigns={campaigns}
+        campaigns={campaigns} // Pass global campaigns
         onManageCampaigns={() => {
           setIsLogModalOpen(false); // Close log modal
           setIsCampaignModalOpen(true); // Open campaign modal
         }}
       />
 
-      <DataManagementModal 
+      <DataManagementModal
         isOpen={isDataModalOpen}
         onClose={() => setIsDataModalOpen(false)}
         imports={imports}
         onDelete={handleDeleteImport}
       />
 
-      <CampaignManagerModal 
+      <CampaignManagerModal
         isOpen={isCampaignModalOpen}
         onClose={() => setIsCampaignModalOpen(false)}
         campaigns={campaigns}
@@ -207,7 +231,7 @@ const Dashboard = () => {
         onDelete={handleDeleteCampaign}
       />
 
-      <MetricManagerModal 
+      <MetricManagerModal
         isOpen={isMetricModalOpen}
         onClose={() => setIsMetricModalOpen(false)}
         customMetrics={metricsConfig} // Pass full config

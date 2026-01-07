@@ -7,9 +7,10 @@ import { useApp } from '../../context/AppContext';
 interface CsvUploaderProps {
   platform: Platform;
   onImport: (metrics: DailyMetric[], filename: string) => void;
+  defaultCampaignName?: string;
 }
 
-export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) => {
+export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport, defaultCampaignName }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { metricsConfig } = useApp();
   const [status, setStatus] = useState<'idle' | 'parsing' | 'success' | 'error'>('idle');
@@ -62,18 +63,21 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) 
       try {
         const text = event.target?.result as string;
         const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-        
+
         if (lines.length < 2) throw new Error("File appears empty");
 
         const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
         const getIndex = (keys: string[]) => headers.findIndex(h => keys.some(k => h === k || h.includes(k)));
-        
+
         // Always look for Date
         const dateIdx = getIndex(['date', 'day', 'time', 'period']);
-        
+
+        // Look for Campaign Name
+        const campaignIdx = getIndex(['campaign', 'campaign name', 'campaign_name']);
+
         // Get active non-derived metrics for this platform
         const activeMetrics = metricsConfig.filter(m => m.platform === platform && !m.isDerived);
-        
+
         // Map metric keys to CSV indices dynamically
         const metricIndices = activeMetrics.map(m => {
           // Heuristic for matching headers: try exact label, or key, or common synonyms
@@ -111,10 +115,25 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) 
             return parseFloat(val.replace(/[^0-9.-]/g, '')) || 0;
           };
 
+          // Determine Campaign Name
+          // 1. From CSV row
+          // 2. From defaultCampaignName prop (e.g. current selected campaign)
+          // 3. Undefined (Platform total / Unassigned)
+          let rowCampaignName = campaignIdx > -1 ? cols[campaignIdx] : undefined;
+
+          // If CSV has empty campaign cell, fall back or keep empty string?
+          if (rowCampaignName === '') rowCampaignName = undefined;
+
+          // If no campaign in row, use default
+          if (!rowCampaignName && defaultCampaignName) {
+            rowCampaignName = defaultCampaignName;
+          }
+
           // Build metric object dynamically
           const metric: any = {
             date: validDate,
             platform,
+            campaignName: rowCampaignName,
             customMetrics: {} // Initialize for safety
           };
 
@@ -123,7 +142,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) 
           // Else store in customMetrics
           metricIndices.forEach(({ key, index }) => {
             const val = index > -1 ? parseNum(cols[index]) : 0;
-            
+
             if (['impressions', 'clicks', 'spend', 'conversions'].includes(key)) {
               metric[key] = val;
             } else {
@@ -141,18 +160,18 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) 
         }
 
         if (newMetrics.length === 0) {
-            throw new Error("No valid data rows found. Please check date format.");
+          throw new Error("No valid data rows found. Please check date format.");
         }
 
         setTimeout(() => {
           onImport(newMetrics, file.name);
           setStatus('success');
           setMessage(`Successfully imported ${newMetrics.length} rows.${skippedRows > 0 ? ` (${skippedRows} skipped)` : ''}`);
-          
+
           setTimeout(() => {
             setStatus('idle');
             setMessage('');
-            if(fileInputRef.current) fileInputRef.current.value = '';
+            if (fileInputRef.current) fileInputRef.current.value = '';
           }, 3000);
         }, 1000);
 
@@ -166,14 +185,14 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) 
 
   return (
     <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center text-center transition-colors relative">
-      <input 
-        type="file" 
+      <input
+        type="file"
         accept=".csv"
         ref={fileInputRef}
         onChange={handleFileChange}
         className="hidden"
       />
-      
+
       {status === 'idle' && (
         <>
           <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center mb-2 text-slate-500">
@@ -189,24 +208,24 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport }) 
 
       {status === 'parsing' && (
         <div className="flex flex-col items-center py-2">
-           <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mb-2"></div>
-           <p className="text-xs text-slate-500">Processing file...</p>
+          <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+          <p className="text-xs text-slate-500">Processing file...</p>
         </div>
       )}
 
       {status === 'success' && (
         <div className="flex flex-col items-center text-green-600 dark:text-green-400 py-1">
-           <CheckCircle size={24} className="mb-1" />
-           <p className="text-sm font-medium">{message}</p>
+          <CheckCircle size={24} className="mb-1" />
+          <p className="text-sm font-medium">{message}</p>
         </div>
       )}
 
       {status === 'error' && (
         <div className="flex flex-col items-center text-red-500 py-1">
-           <AlertCircle size={24} className="mb-1" />
-           <p className="text-sm font-medium">Import Failed</p>
-           <p className="text-xs opacity-80 max-w-[200px]">{message}</p>
-           <button onClick={() => setStatus('idle')} className="mt-2 text-xs underline hover:text-red-600">Try Again</button>
+          <AlertCircle size={24} className="mb-1" />
+          <p className="text-sm font-medium">Import Failed</p>
+          <p className="text-xs opacity-80 max-w-[200px]">{message}</p>
+          <button onClick={() => setStatus('idle')} className="mt-2 text-xs underline hover:text-red-600">Try Again</button>
         </div>
       )}
     </div>

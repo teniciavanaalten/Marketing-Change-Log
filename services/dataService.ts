@@ -1,34 +1,34 @@
 import { ChangeLog, ChangeType, DailyMetric, Platform, ImportRecord, Campaign } from "../types";
 
 // In-memory store to simulate database
-let mockDb: { 
-  logs: ChangeLog[]; 
-  metrics: DailyMetric[]; 
+let mockDb: {
+  logs: ChangeLog[];
+  metrics: DailyMetric[];
   imports: ImportRecord[];
   campaigns: Campaign[];
 } = {
   logs: [],
   metrics: [],
   imports: [],
-  campaigns: [] 
+  campaigns: []
 };
 
 export const dataService = {
   getMetrics: async (platform: Platform, start: string, end: string): Promise<DailyMetric[]> => {
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 300));
-    return mockDb.metrics.filter(m => 
-      m.platform === platform && 
-      m.date >= start && 
+    return mockDb.metrics.filter(m =>
+      m.platform === platform &&
+      m.date >= start &&
       m.date <= end
     ).sort((a, b) => a.date.localeCompare(b.date));
   },
 
   getChangeLogs: async (platform: Platform, start: string, end: string): Promise<ChangeLog[]> => {
     await new Promise(resolve => setTimeout(resolve, 300));
-    return mockDb.logs.filter(l => 
-      l.platform === platform && 
-      l.date >= start && 
+    return mockDb.logs.filter(l =>
+      l.platform === platform &&
+      l.date >= start &&
       l.date <= end
     ).sort((a, b) => b.date.localeCompare(a.date)); // Newest first
   },
@@ -53,7 +53,7 @@ export const dataService = {
 
   importMetrics: async (newMetrics: DailyMetric[], filename: string): Promise<ImportRecord> => {
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     const importId = Math.random().toString(36).substr(2, 9);
     const platform = newMetrics[0]?.platform || 'linkedin';
 
@@ -67,12 +67,16 @@ export const dataService = {
 
     mockDb.imports.unshift(record);
 
-    // Merge strategy: Overwrite if date+platform matches, else add
+    // Merge strategy: Overwrite if date+platform+campaign matches, else add
     // Tag new metrics with importId
     newMetrics.forEach(nm => {
       const metricWithId = { ...nm, importId };
-      const idx = mockDb.metrics.findIndex(m => m.date === nm.date && m.platform === nm.platform);
-      
+      const idx = mockDb.metrics.findIndex(m =>
+        m.date === nm.date &&
+        m.platform === nm.platform &&
+        m.campaignName === nm.campaignName
+      );
+
       if (idx >= 0) {
         mockDb.metrics[idx] = metricWithId;
       } else {
@@ -87,7 +91,7 @@ export const dataService = {
     await new Promise(resolve => setTimeout(resolve, 400));
     // Remove the record
     mockDb.imports = mockDb.imports.filter(i => i.id !== importId);
-    
+
     // Remove metrics associated with this import
     mockDb.metrics = mockDb.metrics.filter(m => m.importId !== importId);
   },

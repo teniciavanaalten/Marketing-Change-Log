@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Platform, DateRange, User, MetricDefinition, PlatformDefinition } from '../types';
+import { Platform, DateRange, User, MetricDefinition, PlatformDefinition, Campaign } from '../types';
 import { DEFAULT_METRICS_TEMPLATE, DEFAULT_PLATFORMS } from '../constants';
+import { dataService } from '../services/dataService';
 
 interface AppContextType {
   theme: 'light' | 'dark';
@@ -10,6 +11,10 @@ interface AppContextType {
   removePlatform: (id: string) => void;
   selectedPlatform: Platform;
   setSelectedPlatform: (p: Platform) => void;
+  selectedCampaignId: string | null;
+  setSelectedCampaignId: (id: string | null) => void;
+  campaigns: Campaign[];
+  refreshCampaigns: () => Promise<void>;
   dateRange: DateRange;
   setDateRange: (range: DateRange) => void;
   user: User | null;
@@ -27,6 +32,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [platforms, setPlatforms] = useState<PlatformDefinition[]>(DEFAULT_PLATFORMS);
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('linkedin');
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [user, setUser] = useState<User | null>({ id: '1', name: 'Demo Marketer', email: 'demo@marketer.io' });
   
   // Initialize metrics with defaults for ALL default platforms
@@ -55,6 +62,66 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [theme]);
 
+  // Load campaigns when platform changes or initially
+  const refreshCampaigns = async () => {
+    try {
+      // We load ALL campaigns so sidebar can show them, or filter by platform there
+      // simpler to load all or just filter inside dataService if needed.
+      // For now, let's load all campaigns efficiently or just for selected?
+      // Sidebar needs to show campaigns for ALL platforms if we want to expand them.
+      // So let's fetch all. But dataService.getCampaigns takes a platform arg.
+      // Let's modify usage or assume we want mainly for selected platform?
+      // Wait, Sidebar design: user clicks platform -> sees campaigns.
+      // If we want to show campaigns nested under each platform in sidebar, we need ALL campaigns or fetch on demand.
+      // For simplicity, let's fetch for the selected platform whenever it changes, 
+      // BUT if we want to show counts or lists in sidebar for other platforms, we might need more.
+      // Actually, let's stick to: we need campaigns for the current view. 
+      // BUT Sidebar wants to list them. 
+      // Let's try to fetch all if possible, or iterate.
+      // dataService.getCampaigns(platform) -- let's optimize this later.
+      // For now, let's just fetch for the CURRENT platform to update the context 'campaigns' 
+      // effectively making 'campaigns' local to the selected platform?
+      // NO, if we want the sidebar to always show them, we need a better strategy. 
+      // Let's change this: `campaigns` in context will hold campaigns for the SELECTED platform 
+      // OR we change dataService to return all.
+      // Be careful. unique IDs across platforms?
+      
+      // Let's just fetch for the selected platform for now to preserve existing logic flow,
+      // and maybe Sidebar only shows campaigns for the *active* platform?
+      // "When a platform is expanded..." - usually implies accordion.
+      // If I expand LinkedIn, I see LinkedIn campaigns. 
+      // If I expand Facebook, I see Facebook campaigns.
+      // So I might need all campaigns loaded.
+      
+      // Let's iterate all platforms to get all campaigns?
+      // That might be expensive.
+      // Let's just store "all campaigns" in a flat list in context?
+      
+      // Temporary solution: Fetch for selected platform, update that list.
+      // Wait, if I change platform, I lose the others?
+      // If I want to render them in sidebar, I need them.
+      
+      // Let's make `refreshCampaigns` fetch for the *selected* platform and maybe we only show them for the selected one in Sidebar?
+      // Plan says: "When a platform is expanded: Show Overview link... Show list of Campaigns".
+      // This implies we could fetch when expanded.
+      
+      // Let's start by just fetching for ALL platforms effectively?
+      // Or just fetch for current.
+      const all: Campaign[] = [];
+      for(const p of platforms) {
+        const c = await dataService.getCampaigns(p.id);
+        all.push(...c);
+      }
+      setCampaigns(all);
+    } catch (e) {
+      console.error("Failed to load campaigns", e);
+    }
+  };
+
+  useEffect(() => {
+    refreshCampaigns();
+  }, [platforms]); // Reload if platforms change. Also initially.
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
@@ -73,33 +140,30 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     
     setPlatforms(prev => [...prev, newPlatform]);
     
-    // Seed default metrics for this new platform
     setMetricsConfig(prev => {
       const defaults = DEFAULT_METRICS_TEMPLATE.map(m => ({ ...m, platform: id }));
       return [...prev, ...defaults];
     });
 
-    // Automatically select the new platform
     setSelectedPlatform(id);
+    setSelectedCampaignId(null); // Reset campaign when adding/selecting new
   };
 
   const removePlatform = (id: string) => {
-    // Don't allow removing if it's the only one (optional safety)
     if (platforms.length <= 1) return;
 
     setPlatforms(prev => prev.filter(p => p.id !== id));
     
-    // Switch selection if needed
     if (selectedPlatform === id) {
        const remaining = platforms.filter(p => p.id !== id);
        if (remaining.length > 0) {
          setSelectedPlatform(remaining[0].id);
+         setSelectedCampaignId(null);
        }
     }
   };
 
   const addMetric = (metric: MetricDefinition) => {
-    // Prevent duplicates for same key+platform
     setMetricsConfig(prev => {
       const exists = prev.some(m => m.key === metric.key && m.platform === metric.platform);
       if (exists) return prev;
@@ -113,9 +177,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const resetMetrics = (platform: Platform) => {
     setMetricsConfig(prev => {
-      // Remove all current metrics for this platform
       const others = prev.filter(m => m.platform !== platform);
-      // Re-add defaults
       const defaults = DEFAULT_METRICS_TEMPLATE.map(m => ({ ...m, platform }));
       return [...others, ...defaults];
     });
@@ -130,6 +192,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       removePlatform,
       selectedPlatform,
       setSelectedPlatform,
+      selectedCampaignId,
+      setSelectedCampaignId,
+      campaigns,
+      refreshCampaigns,
       dateRange,
       setDateRange,
       user,
