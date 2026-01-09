@@ -1,4 +1,4 @@
-import { ChangeLog, ChangeType, DailyMetric, Platform, ImportRecord, Campaign } from "../types";
+import { ChangeLog, DailyMetric, Platform, ImportRecord, Campaign } from "../types";
 
 // In-memory store to simulate database
 let mockDb: {
