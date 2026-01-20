@@ -1,64 +1,110 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MarketerLog - Campaign Analytics</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              // Overriding slate to be a neutral "True Dark" palette
-              slate: {
-                50: '#fafafa',
-                100: '#f4f4f5',
-                200: '#e4e4e7',
-                300: '#d4d4d8',
-                400: '#a1a1aa',
-                500: '#71717a',
-                600: '#52525b',
-                700: '#27272a', // Dark borders
-                800: '#121212', // Card/Sidebar background
-                900: '#000000', // Main background
-                950: '#000000',
-              },
-              brand: {
-                50: '#fdf2f4',
-                100: '#fce7ea',
-                200: '#f8d0d9',
-                300: '#f2aebc',
-                400: '#ea7f95',
-                500: '#e84661', // Base Brand Color
-                600: '#d62a4a',
-                700: '#b51d39',
-                800: '#961b33',
-                900: '#7f1b2f',
-              }
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Melon - Campaign Analytics</title>
+  <!-- Google Fonts: Quicksand -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Quicksand', 'sans-serif'],
+          },
+          colors: {
+            // Warm Cream Backgrounds
+            cream: {
+              50: '#fffdf5',  // Main background
+              100: '#fff9e6',
+              200: '#ffefcc',
+              300: '#ffe099',
+            },
+            // Warm Neutrals (replacing cold slate)
+            slate: {
+              50: '#fcfbf9',
+              100: '#f5f2eb',
+              200: '#e6e0d6',
+              300: '#d6cec0',
+              400: '#a39b8f',
+              500: '#7d766c',
+              600: '#5c564d',
+              700: '#454039',
+              800: '#2e2b26',
+              900: '#1a1816',
+              950: '#0d0c0b',
+            },
+            // Primary: Cantaloupe Orange (#ffb380 base)
+            brand: {
+              50: '#fff5eb',
+              100: '#ffe8d6',
+              200: '#ffd1ad',
+              300: '#ffb380', // Base
+              400: '#ff9052',
+              500: '#ff6b26',
+              600: '#f04f0f',
+              700: '#c73a08',
+              800: '#9e2e0a',
+              900: '#82280c',
+            },
+            // Secondary: Honeydew Green (#d0f0c0 base)
+            secondary: {
+              50: '#f7fdf5',
+              100: '#ebfbe7',
+              200: '#dcf8d3',
+              300: '#d0f0c0', // Base
+              400: '#a8e096',
+              500: '#7bc765',
+              600: '#5ca647',
+              700: '#488539',
+              800: '#3c6932',
+              900: '#32562d',
             }
+          },
+          boxShadow: {
+            'soft': '0 10px 30px -5px rgba(0, 0, 0, 0.05)',
+            'soft-lg': '0 20px 40px -5px rgba(0, 0, 0, 0.08)',
+          },
+          borderRadius: {
+            'xl': '1rem',
+            '2xl': '1.5rem',
+            '3xl': '2rem',
+            '4xl': '2.5rem',
           }
         }
       }
-    </script>
-    <style>
-      /* Custom scrollbar for sidebar */
-      ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 3px;
-      }
-      .dark ::-webkit-scrollbar-thumb {
-        background: #3f3f46;
-      }
-    </style>
+    }
+  </script>
+  <style>
+    /* Custom scrollbar for sidebar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #d6cec0;
+      /* warm neutral 300 */
+      border-radius: 99px;
+    }
+
+    .dark ::-webkit-scrollbar-thumb {
+      background: #5c564d;
+      /* warm neutral 600 */
+    }
+  </style>
   <script type="importmap">
 {
   "imports": {
@@ -73,8 +119,11 @@
 }
 </script>
 </head>
-  <body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200">
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+
+<body
+  class="bg-cream-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200 font-sans antialiased">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
 </html>

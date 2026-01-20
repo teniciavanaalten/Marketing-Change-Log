@@ -96,41 +96,41 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
       {/* Sidebar Container */}
       <aside
         className={`
-          fixed md:sticky top-0 left-0 z-30 h-screen bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700
+          fixed md:sticky top-0 left-0 z-30 h-screen bg-white/80 dark:bg-slate-800 backdrop-blur-sm border-r border-slate-200 dark:border-slate-700
           transition-all duration-300 ease-in-out flex flex-col
           ${mobileOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'}
-          ${collapsed ? 'md:w-20' : 'md:w-64'}
+          ${collapsed ? 'md:w-24' : 'md:w-72'}
         `}
       >
         {/* Logo Area */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-100 dark:border-slate-700">
+        <div className="h-24 flex items-center justify-between px-6 border-b border-slate-100 dark:border-slate-700">
           {!collapsed && (
-            <div className="flex items-center gap-2 font-bold text-xl text-slate-800 dark:text-white">
-              <div className="w-8 h-8 bg-brand-500 rounded-lg flex items-center justify-center text-white">
+            <div className="flex items-center gap-3 font-bold text-2xl text-slate-800 dark:text-white">
+              <div className="w-10 h-10 bg-brand-300 rounded-full flex items-center justify-center text-slate-900 shadow-sm">
                 M
               </div>
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-brand-500 to-brand-600">
-                MarketerLog
+              <span className="text-slate-800 tracking-tight">
+                Melon
               </span>
             </div>
           )}
           {collapsed && (
-            <div className="w-10 h-10 bg-brand-500 rounded-lg flex items-center justify-center text-white mx-auto">
+            <div className="w-10 h-10 bg-brand-300 rounded-full flex items-center justify-center text-slate-900 mx-auto shadow-sm">
               M
             </div>
           )}
 
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="hidden md:flex p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+            className="hidden md:flex p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
           >
             {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <div className={`flex items-center justify-between text-xs font-semibold text-slate-400 uppercase mb-2 ${collapsed ? 'flex-col gap-2' : 'px-2'}`}>
+        <nav className="flex-1 p-6 space-y-3 overflow-y-auto">
+          <div className={`flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 ${collapsed ? 'flex-col gap-2' : 'px-2'}`}>
             <span>{collapsed ? 'Plats' : 'Platforms'}</span>
             <button
               onClick={() => setIsManagerOpen(true)}
@@ -151,19 +151,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
                 <button
                   onClick={() => handlePlatformClick(platform.id)}
                   className={`
-                    w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors relative
+                    w-full flex items-center gap-3 px-4 py-3 rounded-full transition-all duration-200 relative
                     ${isSelected && selectedCampaignId === null
-                      ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                      ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 font-bold shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:pl-5'
                     }
-                    ${collapsed ? 'justify-center px-0' : ''}
+                    ${collapsed ? 'justify-center px-0 hover:pl-0' : ''}
                   `}
                   title={collapsed ? platform.label : undefined}
                 >
                   {getIcon(platform.id, platform.emoji)}
                   {!collapsed && (
                     <>
-                      <span className="font-medium truncate flex-1 text-left">{platform.label}</span>
+                      <span className="truncate flex-1 text-left">{platform.label}</span>
                       <ChevronDown
                         size={14}
                         className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -173,8 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
 
                   {isSelected && selectedCampaignId === null && !collapsed && (
                     <div
-                      className="absolute right-2 w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: platform.color || '#e84661' }}
+                      className="absolute left-0 w-1 h-8 rounded-r-full bg-[#96ac60]"
                     ></div>
                   )}
                 </button>
@@ -239,7 +238,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
             )}
           </div>
         </div>
-      </aside>
+      </aside >
 
       <PlatformManagerModal
         isOpen={isManagerOpen}

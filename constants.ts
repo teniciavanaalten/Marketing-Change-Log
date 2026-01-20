@@ -5,14 +5,12 @@ export const BRAND_COLOR = '#e84661';
 
 // Palette for multi-metric lines
 export const CHART_COLORS = [
-  '#e84661', // Brand (Red/Pink)
-  '#8b5cf6', // Violet
-  '#06b6d4', // Cyan
-  '#f59e0b', // Amber
-  '#ec4899', // Pink
-  '#6366f1', // Indigo
-  '#10b981', // Emerald
-  '#f97316', // Orange
+  '#FF7D5D', // Cantaloupe (Primary)
+  '#6FCF97', // Honeydew (Fresh Green)
+  '#FF5C8D', // Watermelon (Vibrant Pink)
+  '#FFBE0B', // Golden Melon (Warm Yellow)
+  '#7F9CF5', // Cool Blue (Contrast)
+  '#A78BFA', // Soft Purple (Contrast)
 ];
 
 export const DEFAULT_PLATFORMS: PlatformDefinition[] = [

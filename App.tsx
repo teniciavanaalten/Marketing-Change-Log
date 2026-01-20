@@ -266,11 +266,11 @@ const AppContent = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="flex min-h-screen bg-cream-50 dark:bg-slate-900">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
         <Header onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-900">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-cream-50 dark:bg-slate-900">
           <Dashboard />
         </main>
       </div>
