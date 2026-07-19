@@ -63,7 +63,9 @@ export const AddChangeModal: React.FC<AddChangeModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit({
-      platform,
+      // When editing, keep the log's original platform (the modal may be opened
+      // from the master Cockpit view, where `platform` is not a real platform)
+      platform: editingLog ? editingLog.platform : platform,
       campaignName: formData.campaignName,
       changeType: formData.changeType,
       description: formData.description,

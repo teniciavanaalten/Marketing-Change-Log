@@ -1,4 +1,5 @@
 import { ChangeLog, DailyMetric, Platform, ImportRecord, Campaign } from "../types";
+import { MASTER_VIEW_ID } from "../constants";
 
 // In-memory store to simulate database
 let mockDb: {
@@ -17,8 +18,9 @@ export const dataService = {
   getMetrics: async (platform: Platform, start: string, end: string): Promise<DailyMetric[]> => {
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 300));
+    // MASTER_VIEW_ID means "all platforms"
     return mockDb.metrics.filter(m =>
-      m.platform === platform &&
+      (platform === MASTER_VIEW_ID || m.platform === platform) &&
       m.date >= start &&
       m.date <= end
     ).sort((a, b) => a.date.localeCompare(b.date));
@@ -26,8 +28,9 @@ export const dataService = {
 
   getChangeLogs: async (platform: Platform, start: string, end: string): Promise<ChangeLog[]> => {
     await new Promise(resolve => setTimeout(resolve, 300));
+    // MASTER_VIEW_ID means "all platforms"
     return mockDb.logs.filter(l =>
-      l.platform === platform &&
+      (platform === MASTER_VIEW_ID || l.platform === platform) &&
       l.date >= start &&
       l.date <= end
     ).sort((a, b) => b.date.localeCompare(a.date)); // Newest first

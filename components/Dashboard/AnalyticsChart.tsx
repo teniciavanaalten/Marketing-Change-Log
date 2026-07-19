@@ -11,7 +11,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { DailyMetric, ChangeLog, MetricKey } from '../../types';
-import { CHART_COLORS, BRAND_COLOR } from '../../constants';
+import { CHART_COLORS, BRAND_COLOR, MASTER_VIEW_ID, DEFAULT_METRICS_TEMPLATE } from '../../constants';
 import { useApp } from '../../context/AppContext';
 import { ChevronDown, Check } from 'lucide-react';
 
@@ -26,28 +26,49 @@ type Granularity = 'daily' | 'weekly' | 'monthly';
 export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeLogs, isLoading }) => {
   const { theme, metricsConfig, selectedPlatform, platforms, dateRange } = useApp();
 
-  // Color used for change-event marker lines: the platform's accent, or brand fallback
-  const eventColor = platforms.find(p => p.id === selectedPlatform)?.color || BRAND_COLOR;
-  
+  // Master "Cockpit" view: all platforms on one timeline, one line per platform
+  const isMaster = selectedPlatform === MASTER_VIEW_ID;
+
+  const platformColor = (platformId: string) =>
+    platforms.find(p => p.id === platformId)?.color || BRAND_COLOR;
+
+  // Color used for change-event marker lines in per-platform view
+  const eventColor = platformColor(selectedPlatform);
+
   // State
   const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>([]);
   const [granularity, setGranularity] = useState<Granularity>('daily');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Get active metrics for this platform
+  // Get active metrics for this platform.
+  // In master view: the fixed core metric set shared by every DailyMetric.
   const platformMetrics = useMemo(() => {
+    if (isMaster) {
+      return DEFAULT_METRICS_TEMPLATE.map(m => ({ ...m, platform: MASTER_VIEW_ID }));
+    }
     return metricsConfig.filter(m => m.platform === selectedPlatform);
-  }, [metricsConfig, selectedPlatform]);
+  }, [metricsConfig, selectedPlatform, isMaster]);
 
   const isSingleMetric = selectedMetrics.length === 1;
+  // Master view always plots ONE metric (per-platform lines) on an absolute scale
+  const useAbsoluteScale = isMaster || isSingleMetric;
 
   // Initialize selected metrics if empty or invalid
   useEffect(() => {
-    // If we have no selection or invalid selection, pick top 2 available
     const availableKeys = platformMetrics.map(m => m.key);
+
+    // Master view is single-metric only
+    if (isMaster) {
+      if (selectedMetrics.length !== 1 || !availableKeys.includes(selectedMetrics[0])) {
+        setSelectedMetrics(['spend']);
+      }
+      return;
+    }
+
+    // If we have no selection or invalid selection, pick top 2 available
     const validSelected = selectedMetrics.filter(k => availableKeys.includes(k));
-    
+
     if (validSelected.length === 0 && platformMetrics.length > 0) {
       // Default preference: Spend and Conversions if available, else just first two
       const preferred = ['spend', 'conversions'];
@@ -73,8 +94,13 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Handle Selection Limit (Max 4)
+  // Handle Selection Limit (Max 4); master view is single-select
   const toggleMetric = (key: string) => {
+    if (isMaster) {
+      setSelectedMetrics([key]);
+      setIsDropdownOpen(false);
+      return;
+    }
     if (selectedMetrics.includes(key)) {
       if (selectedMetrics.length > 1) {
         setSelectedMetrics(prev => prev.filter(k => k !== key));
@@ -115,6 +141,99 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
       return { key: dateStr, dateObj };
     };
 
+    const startTime = new Date(dateRange.start).getTime();
+    const endTime = new Date(dateRange.end).getTime();
+    if (isNaN(startTime) || isNaN(endTime) || startTime > endTime) return [];
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    // Shared axis/tooltip labels per bucket
+    const formatDates = (dateObj: Date): { displayDate: string; fullDate: string } => {
+      if (granularity === 'monthly') {
+        return {
+          displayDate: dateObj.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }),
+          fullDate: dateObj.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+        };
+      }
+      if (granularity === 'weekly') {
+        return {
+          displayDate: dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+          fullDate: `Week of ${dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`
+        };
+      }
+      return {
+        displayDate: dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }),
+        fullDate: dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      };
+    };
+
+    // MASTER VIEW: one line per platform for the single selected metric.
+    // Derived metrics are computed per platform per bucket from summed
+    // numerators/denominators — never by averaging ratios.
+    if (isMaster) {
+      const grouped = new Map<string, {
+        dateObj: Date;
+        perPlatform: Record<string, { impressions: number; clicks: number; spend: number; conversions: number }>;
+        changeLogs: ChangeLog[];
+      }>();
+
+      for (let t = startTime; t <= endTime; t += DAY_MS) {
+        const dayStr = new Date(t).toISOString().split('T')[0];
+        const { key, dateObj } = getBucket(dayStr);
+        if (!grouped.has(key)) {
+          grouped.set(key, { dateObj, perPlatform: {}, changeLogs: [] });
+        }
+      }
+
+      metrics.forEach(m => {
+        const { key, dateObj } = getBucket(m.date);
+        if (!grouped.has(key)) {
+          grouped.set(key, { dateObj, perPlatform: {}, changeLogs: [] });
+        }
+        const entry = grouped.get(key)!;
+        const agg = entry.perPlatform[m.platform] ||
+          (entry.perPlatform[m.platform] = { impressions: 0, clicks: 0, spend: 0, conversions: 0 });
+        agg.impressions += m.impressions || 0;
+        agg.clicks += m.clicks || 0;
+        agg.spend += m.spend || 0;
+        agg.conversions += m.conversions || 0;
+      });
+
+      changeLogs.forEach(l => {
+        const entry = grouped.get(getBucket(l.date).key);
+        if (entry) entry.changeLogs.push(l);
+      });
+
+      const metricKey = selectedMetrics[0] || 'spend';
+
+      return Array.from(grouped.values())
+        .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())
+        .map(entry => {
+          const row: any = {
+            ...formatDates(entry.dateObj),
+            changeLogs: entry.changeLogs,
+            hasChange: entry.changeLogs.length > 0
+          };
+
+          platforms.forEach(p => {
+            const agg = entry.perPlatform[p.id];
+            if (!agg) {
+              row[p.id] = null; // No data for this platform in this bucket
+              return;
+            }
+            let val = 0;
+            if (metricKey === 'ctr') val = agg.impressions > 0 ? (agg.clicks / agg.impressions) * 100 : 0;
+            else if (metricKey === 'cpc') val = agg.clicks > 0 ? agg.spend / agg.clicks : 0;
+            else if (metricKey === 'cpa') val = agg.conversions > 0 ? agg.spend / agg.conversions : 0;
+            else if (metricKey === 'conversionRate') val = agg.clicks > 0 ? (agg.conversions / agg.clicks) * 100 : 0;
+            else val = (agg as any)[metricKey] || 0; // Base metrics: summed
+
+            row[p.id] = parseFloat(val.toFixed(2));
+          });
+
+          return row;
+        });
+    }
+
     // 1. Build buckets for EVERY day in the selected date range,
     // so events on days without metric rows still get a slot on the axis.
     const groupedData = new Map<string, {
@@ -125,11 +244,6 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
       hasData: boolean; // Whether any metric row landed in this bucket
     }>();
 
-    const startTime = new Date(dateRange.start).getTime();
-    const endTime = new Date(dateRange.end).getTime();
-    if (isNaN(startTime) || isNaN(endTime) || startTime > endTime) return [];
-
-    const DAY_MS = 24 * 60 * 60 * 1000;
     for (let t = startTime; t <= endTime; t += DAY_MS) {
       const dayStr = new Date(t).toISOString().split('T')[0];
       const { key, dateObj } = getBucket(dayStr);
@@ -197,16 +311,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
         };
 
         // Date formatting
-        if (granularity === 'monthly') {
-           processedRow.displayDate = entry.dateObj.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
-           processedRow.fullDate = entry.dateObj.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-        } else if (granularity === 'weekly') {
-           processedRow.displayDate = entry.dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-           processedRow.fullDate = `Week of ${entry.dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}`;
-        } else {
-           processedRow.displayDate = entry.dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' });
-           processedRow.fullDate = entry.dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-        }
+        Object.assign(processedRow, formatDates(entry.dateObj));
 
         // Buckets without any metric rows get null values so lines can
         // skip over them (rendered with connectNulls)
@@ -272,7 +377,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
     });
 
     return result;
-  }, [metrics, changeLogs, granularity, platformMetrics, selectedMetrics, dateRange]);
+  }, [metrics, changeLogs, granularity, platformMetrics, selectedMetrics, dateRange, isMaster, platforms]);
 
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -284,25 +389,48 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
           <p className="text-slate-500 dark:text-slate-400 text-xs mb-2 font-medium">{data.fullDate}</p>
           
           <div className="space-y-2 mb-3">
-            {selectedMetrics.map((key, index) => {
-              const config = platformMetrics.find(o => o.key === key);
-              if(!config) return null;
-              
-              const val = data[key];
-              let formattedVal = val?.toLocaleString() || '0';
-              if (config.format === 'currency') formattedVal = `$${val?.toLocaleString()}`;
-              if (config.format === 'percent') formattedVal = `${val}%`;
+            {isMaster ? (
+              // Master view: one value per platform for the selected metric
+              payload
+                .filter((entry: any) => entry.value != null)
+                .map((entry: any) => {
+                  const config = platformMetrics.find(o => o.key === selectedMetrics[0]);
+                  const val = entry.value;
+                  let formattedVal = val?.toLocaleString() || '0';
+                  if (config?.format === 'currency') formattedVal = `$${val?.toLocaleString()}`;
+                  if (config?.format === 'percent') formattedVal = `${val}%`;
 
-              return (
-                <div key={key} className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}></div>
-                    <span className="text-sm text-slate-600 dark:text-slate-300 capitalize">{config.label}</span>
+                  return (
+                    <div key={entry.dataKey} className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></div>
+                        <span className="text-sm text-slate-600 dark:text-slate-300">{entry.name}</span>
+                      </div>
+                      <span className="text-sm font-bold text-slate-900 dark:text-white">{formattedVal}</span>
+                    </div>
+                  );
+                })
+            ) : (
+              selectedMetrics.map((key, index) => {
+                const config = platformMetrics.find(o => o.key === key);
+                if(!config) return null;
+
+                const val = data[key];
+                let formattedVal = val?.toLocaleString() || '0';
+                if (config.format === 'currency') formattedVal = `$${val?.toLocaleString()}`;
+                if (config.format === 'percent') formattedVal = `${val}%`;
+
+                return (
+                  <div key={key} className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}></div>
+                      <span className="text-sm text-slate-600 dark:text-slate-300 capitalize">{config.label}</span>
+                    </div>
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">{formattedVal}</span>
                   </div>
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">{formattedVal}</span>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
 
           {data.hasChange && (
@@ -314,6 +442,17 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
                 {data.changeLogs.map((log: ChangeLog, idx: number) => (
                    <div key={idx} className="flex flex-col">
                       <div className="flex items-center gap-1.5">
+                        {isMaster && (
+                          <>
+                            <span
+                              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: platformColor(log.platform) }}
+                            ></span>
+                            <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+                              {platforms.find(p => p.id === log.platform)?.label || log.platform}
+                            </span>
+                          </>
+                        )}
                         <span className="text-[10px] font-semibold text-brand-500">{log.changeType}</span>
                       </div>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1 ml-1">
@@ -367,7 +506,9 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
             className="flex items-center justify-between w-48 px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-sm text-slate-700 dark:text-slate-200 hover:border-brand-500 focus:outline-none"
           >
             <span className="truncate">
-              {selectedMetrics.length} Selected
+              {isMaster
+                ? (platformMetrics.find(m => m.key === selectedMetrics[0])?.label || 'Select Metric')
+                : `${selectedMetrics.length} Selected`}
             </span>
             <ChevronDown size={16} className="text-slate-400 ml-2" />
           </button>
@@ -375,12 +516,12 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
           {isDropdownOpen && (
             <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-xl z-50 overflow-hidden">
                <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700">
-                 <p className="text-xs font-semibold text-slate-500 uppercase">Select Metrics (Max 4)</p>
+                 <p className="text-xs font-semibold text-slate-500 uppercase">{isMaster ? 'Select Metric' : 'Select Metrics (Max 4)'}</p>
                </div>
                <div className="max-h-60 overflow-y-auto p-1">
                  {platformMetrics.map((opt) => {
                    const isSelected = selectedMetrics.includes(opt.key);
-                   const isDisabled = !isSelected && selectedMetrics.length >= 4;
+                   const isDisabled = !isMaster && !isSelected && selectedMetrics.length >= 4;
                    
                    return (
                      <button
@@ -409,7 +550,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
 
       <div className="h-80 w-full relative">
          {/* Y-Axis Label for Normalized Data - Only show if normalized */}
-        {!isSingleMetric && (
+        {!useAbsoluteScale && (
           <div className="absolute -left-6 top-1/2 -translate-y-1/2 -rotate-90 text-[10px] text-slate-400 uppercase tracking-widest pointer-events-none">
             Relative Scale (0-100%)
           </div>
@@ -433,10 +574,10 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
               fontSize={10} 
               tickLine={false}
               axisLine={false}
-              domain={isSingleMetric ? ['auto', 'auto'] : [0, 100]}
+              domain={useAbsoluteScale ? ['auto', 'auto'] : [0, 100]}
               tickFormatter={(val) => {
-                if (!isSingleMetric) return `${val}%`;
-                
+                if (!useAbsoluteScale) return `${val}%`;
+
                 // Format specific single metric
                 const config = platformMetrics.find(o => o.key === selectedMetrics[0]);
                 if (config?.format === 'currency') return `$${val >= 1000 ? (val/1000).toFixed(1) + 'k' : val}`;
@@ -444,28 +585,33 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
                 if (val >= 1000) return `${(val / 1000).toFixed(1)}k`;
                 return val;
               }}
-              width={isSingleMetric ? 45 : 30}
+              width={useAbsoluteScale ? 45 : 30}
             />
             
             <Tooltip content={<CustomTooltip />} />
 
             {/* Change-log events as full-height dashed marker lines */}
-            {chartData.filter((d: any) => d.hasChange).map((d: any) => (
-              <ReferenceLine
-                key={`event-${d.displayDate}`}
-                x={d.displayDate}
-                stroke={eventColor}
-                strokeDasharray="4 4"
-                strokeOpacity={0.6}
-                label={d.changeLogs.length > 1 ? {
-                  value: `${d.changeLogs.length}×`,
-                  position: 'top',
-                  fill: eventColor,
-                  fontSize: 10,
-                  fontWeight: 700
-                } : undefined}
-              />
-            ))}
+            {chartData.filter((d: any) => d.hasChange).map((d: any) => {
+              // Master view: color the marker by the event's platform
+              // (first event wins when multiple platforms share a bucket)
+              const markerColor = isMaster ? platformColor(d.changeLogs[0].platform) : eventColor;
+              return (
+                <ReferenceLine
+                  key={`event-${d.displayDate}`}
+                  x={d.displayDate}
+                  stroke={markerColor}
+                  strokeDasharray="4 4"
+                  strokeOpacity={0.6}
+                  label={d.changeLogs.length > 1 ? {
+                    value: `${d.changeLogs.length}×`,
+                    position: 'top',
+                    fill: markerColor,
+                    fontSize: 10,
+                    fontWeight: 700
+                  } : undefined}
+                />
+              );
+            })}
 
 
             <Legend 
@@ -473,25 +619,40 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
               formatter={(value) => <span style={{ color: theme === 'dark' ? '#e2e8f0' : '#334155', fontSize: '12px', fontWeight: 500 }}>{value}</span>}
             />
 
-            {/* Render a Line for each selected metric */}
-            {selectedMetrics.map((metricKey, index) => {
-              const metricConfig = platformMetrics.find(m => m.key === metricKey);
-              return (
-                <Line 
-                  key={metricKey}
-                  type="monotone" 
-                  // If single metric, use raw value, else use normalized value
-                  dataKey={isSingleMetric ? metricKey : `${metricKey}_norm`}
-                  name={metricConfig?.label || metricKey}
-                  stroke={CHART_COLORS[index % CHART_COLORS.length]}
-                  strokeWidth={2}
-                  dot={false}
-                  connectNulls
-                  activeDot={{ r: 5, strokeWidth: 0 }}
-                  isAnimationActive={false} // Smoother toggling
-                />
-              );
-            })}
+            {/* Master view: one line per platform. Per-platform view: one line per selected metric. */}
+            {isMaster
+              ? platforms.map(p => (
+                  <Line
+                    key={p.id}
+                    type="monotone"
+                    dataKey={p.id}
+                    name={p.label}
+                    stroke={p.color}
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                    activeDot={{ r: 5, strokeWidth: 0 }}
+                    isAnimationActive={false}
+                  />
+                ))
+              : selectedMetrics.map((metricKey, index) => {
+                  const metricConfig = platformMetrics.find(m => m.key === metricKey);
+                  return (
+                    <Line
+                      key={metricKey}
+                      type="monotone"
+                      // If single metric, use raw value, else use normalized value
+                      dataKey={isSingleMetric ? metricKey : `${metricKey}_norm`}
+                      name={metricConfig?.label || metricKey}
+                      stroke={CHART_COLORS[index % CHART_COLORS.length]}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls
+                      activeDot={{ r: 5, strokeWidth: 0 }}
+                      isAnimationActive={false} // Smoother toggling
+                    />
+                  );
+                })}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

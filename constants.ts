@@ -3,6 +3,9 @@ import { MetricDefinition, PlatformDefinition, ChangeTypeDefinition } from "./ty
 
 export const BRAND_COLOR = '#e84661';
 
+// Sentinel "platform" id for the master Cockpit view (all platforms combined)
+export const MASTER_VIEW_ID = '__master__';
+
 // Palette for multi-metric lines
 export const CHART_COLORS = [
   '#FF7D5D', // Cantaloupe (Primary)

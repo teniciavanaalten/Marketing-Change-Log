@@ -14,6 +14,7 @@ import { MetricManagerModal } from './components/Dashboard/MetricManagerModal';
 import { ChangeTypeManagerModal } from './components/Dashboard/ChangeTypeManagerModal';
 import { dataService } from './services/dataService';
 import { ChangeLog, DailyMetric, ImportRecord } from './types';
+import { MASTER_VIEW_ID } from './constants';
 import { Plus, Settings } from 'lucide-react';
 
 const Dashboard = () => {
@@ -28,8 +29,11 @@ const Dashboard = () => {
     refreshCampaigns,
     changeTypesConfig,
     addChangeType,
-    removeChangeType
+    removeChangeType,
+    platforms
   } = useApp();
+
+  const isMasterView = selectedPlatform === MASTER_VIEW_ID;
 
   const [metrics, setMetrics] = useState<DailyMetric[]>([]);
   const [logs, setLogs] = useState<ChangeLog[]>([]);
@@ -113,8 +117,8 @@ const Dashboard = () => {
     await refreshCampaigns(); // Update global context
   };
 
-  // Filter logic
-  const selectedCampaignName = selectedCampaignId
+  // Filter logic (campaign filtering does not apply in the master view)
+  const selectedCampaignName = !isMasterView && selectedCampaignId
     ? campaigns.find(c => c.id === selectedCampaignId)?.name
     : null;
 
@@ -143,6 +147,8 @@ const Dashboard = () => {
           </Card>
         </div>
         <div className="space-y-6">
+          {/* Uploads are platform-specific: hidden in the master Cockpit view */}
+          {!isMasterView && (
           <Card
             title="Data Import"
             action={
@@ -186,9 +192,10 @@ const Dashboard = () => {
               </div>
             </div>
           </Card>
+          )}
 
-          {/* Quick Stats Summary */}
-          {!loading && filteredMetrics.length > 0 && (
+          {/* Quick Stats Summary (per-platform view) */}
+          {!isMasterView && !loading && filteredMetrics.length > 0 && (
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
                 <p className="text-xs text-slate-500 uppercase">Total Spend</p>
@@ -204,6 +211,86 @@ const Dashboard = () => {
               </div>
             </div>
           )}
+
+          {/* Master view: totals across all platforms + per-platform breakdown */}
+          {isMasterView && !loading && metrics.length > 0 && (() => {
+            const totalSpend = metrics.reduce((acc, m) => acc + m.spend, 0);
+            const totalConversions = metrics.reduce((acc, m) => acc + m.conversions, 0);
+            const totalClicks = metrics.reduce((acc, m) => acc + m.clicks, 0);
+
+            return (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 uppercase">Total Spend</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                      ${totalSpend.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 uppercase">Total Conv.</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                      {totalConversions.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 uppercase">Total Clicks</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                      {totalClicks.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <p className="text-xs text-slate-500 uppercase">Blended CPA</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">
+                      {totalConversions > 0 ? `$${(totalSpend / totalConversions).toFixed(2)}` : '—'}
+                    </p>
+                  </div>
+                </div>
+
+                <Card title="By Platform">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] text-slate-400 uppercase text-left">
+                        <th className="pb-2 font-semibold">Platform</th>
+                        <th className="pb-2 font-semibold text-right">Spend</th>
+                        <th className="pb-2 font-semibold text-right">Conv.</th>
+                        <th className="pb-2 font-semibold text-right">CPA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {platforms.map(p => {
+                        const rows = metrics.filter(m => m.platform === p.id);
+                        const spend = rows.reduce((acc, m) => acc + m.spend, 0);
+                        const conv = rows.reduce((acc, m) => acc + m.conversions, 0);
+                        return (
+                          <tr key={p.id} className="border-t border-slate-100 dark:border-slate-700">
+                            <td className="py-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="w-2 h-2 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: p.color }}
+                                ></span>
+                                <span className="text-slate-700 dark:text-slate-300 truncate">{p.label}</span>
+                              </div>
+                            </td>
+                            <td className="py-2 text-right font-medium text-slate-900 dark:text-white">
+                              ${spend.toLocaleString()}
+                            </td>
+                            <td className="py-2 text-right font-medium text-slate-900 dark:text-white">
+                              {conv.toLocaleString()}
+                            </td>
+                            <td className="py-2 text-right font-medium text-slate-900 dark:text-white">
+                              {conv > 0 ? `$${(spend / conv).toFixed(2)}` : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </Card>
+              </>
+            );
+          })()}
         </div>
       </div>
 
@@ -211,17 +298,21 @@ const Dashboard = () => {
       <Card
         title={selectedCampaignName ? `Change Log: ${selectedCampaignName}` : "Change Log"}
         action={
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setIsCampaignModalOpen(true)} className="hidden sm:flex">
-              Campaigns
-            </Button>
-            <Button size="sm" icon={<Plus size={16} />} onClick={() => { setEditingLog(null); setIsLogModalOpen(true); }}>
-              Log Change
-            </Button>
-          </div>
+          // Logging changes and managing campaigns are platform-specific:
+          // hidden in the master Cockpit view
+          !isMasterView ? (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setIsCampaignModalOpen(true)} className="hidden sm:flex">
+                Campaigns
+              </Button>
+              <Button size="sm" icon={<Plus size={16} />} onClick={() => { setEditingLog(null); setIsLogModalOpen(true); }}>
+                Log Change
+              </Button>
+            </div>
+          ) : undefined
         }
       >
-        <ChangeLogTable logs={filteredLogs} onDelete={handleDeleteLog} onEdit={handleEditLog} isLoading={loading} />
+        <ChangeLogTable logs={filteredLogs} onDelete={handleDeleteLog} onEdit={handleEditLog} isLoading={loading} showPlatform={isMasterView} />
       </Card>
 
       <AddChangeModal
@@ -235,7 +326,7 @@ const Dashboard = () => {
           setIsLogModalOpen(false); // Close log modal
           setIsCampaignModalOpen(true); // Open campaign modal
         }}
-        changeTypes={changeTypesConfig.filter(ct => ct.platform === selectedPlatform)}
+        changeTypes={changeTypesConfig.filter(ct => ct.platform === (editingLog ? editingLog.platform : selectedPlatform))}
         onManageChangeTypes={() => {
           setIsLogModalOpen(false); // Close log modal
           setIsChangeTypeModalOpen(true); // Open change type modal

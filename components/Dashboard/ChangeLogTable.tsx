@@ -1,15 +1,18 @@
 import React from 'react';
 import { ChangeLog } from '../../types';
 import { Trash2, Tag, Edit2 } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
 interface ChangeLogTableProps {
   logs: ChangeLog[];
   onDelete: (id: string) => void;
   onEdit: (log: ChangeLog) => void;
   isLoading: boolean;
+  showPlatform?: boolean; // Master view: show which platform each log belongs to
 }
 
-export const ChangeLogTable: React.FC<ChangeLogTableProps> = ({ logs, onDelete, onEdit, isLoading }) => {
+export const ChangeLogTable: React.FC<ChangeLogTableProps> = ({ logs, onDelete, onEdit, isLoading, showPlatform = false }) => {
+  const { platforms } = useApp();
   if (isLoading) {
     return <div className="space-y-4">
       {[1,2,3].map(i => <div key={i} className="h-16 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" />)}
@@ -30,6 +33,7 @@ export const ChangeLogTable: React.FC<ChangeLogTableProps> = ({ logs, onDelete, 
       <div className="space-y-3">
         {logs.map((log) => {
           const dateObj = new Date(log.date);
+          const platformDef = platforms.find(p => p.id === log.platform);
           return (
             <div 
               key={log.id} 
@@ -44,7 +48,16 @@ export const ChangeLogTable: React.FC<ChangeLogTableProps> = ({ logs, onDelete, 
 
               {/* Content */}
               <div className="flex-grow min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  {showPlatform && (
+                    <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: platformDef?.color || '#94a3b8' }}
+                      ></span>
+                      {platformDef?.label || log.platform}
+                    </span>
+                  )}
                   <span className="px-2 py-0.5 rounded-full bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-300 text-xs font-bold uppercase tracking-wide">
                     {log.changeType}
                   </span>

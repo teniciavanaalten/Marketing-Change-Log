@@ -9,9 +9,11 @@ import {
   ChevronRight,
   PlusCircle,
   ChevronDown,
-  Target
+  Target,
+  Gauge
 } from 'lucide-react';
 import { Platform } from '../../types';
+import { MASTER_VIEW_ID } from '../../constants';
 import { PlatformManagerModal } from '../Dashboard/PlatformManagerModal';
 
 interface SidebarProps {
@@ -130,6 +132,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
 
         {/* Navigation */}
         <nav className="flex-1 p-6 space-y-3 overflow-y-auto">
+          {/* Master Cockpit view: all platforms on one timeline */}
+          <button
+            onClick={() => {
+              setSelectedPlatform(MASTER_VIEW_ID);
+              setSelectedCampaignId(null);
+              setExpandedPlatform(null);
+              setMobileOpen(false);
+            }}
+            className={`
+              w-full flex items-center gap-3 px-4 py-3 mb-4 rounded-full border transition-all duration-200 relative
+              ${selectedPlatform === MASTER_VIEW_ID
+                ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 font-bold shadow-sm border-brand-200 dark:border-brand-900/40'
+                : 'text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }
+              ${collapsed ? 'justify-center px-0' : ''}
+            `}
+            title={collapsed ? 'Cockpit' : undefined}
+          >
+            <Gauge size={20} />
+            {!collapsed && <span className="truncate flex-1 text-left">Cockpit</span>}
+            {selectedPlatform === MASTER_VIEW_ID && !collapsed && (
+              <div className="absolute left-0 w-1 h-8 rounded-r-full bg-[#96ac60]"></div>
+            )}
+          </button>
+
           <div className={`flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 ${collapsed ? 'flex-col gap-2' : 'px-2'}`}>
             <span>{collapsed ? 'Plats' : 'Platforms'}</span>
             <button
