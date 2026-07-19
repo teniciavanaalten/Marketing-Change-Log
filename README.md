@@ -1,20 +1,21 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Melon — Marketing Master Dashboard
 
-# Run and deploy your AI Studio app
+Eén dashboard voor al je marketingdata. Log wijzigingen (campagne live, budget aangepast, nieuwe creative) en zie ze als markers over je performance-grafieken heen, zodat je zelf verbanden kunt spotten: "ik zette op 3 juni een LinkedIn-campagne live — wat gebeurde er daarna met mijn andere cijfers?"
 
-This contains everything you need to run your app locally.
+**Nu:** change log + CSV-import + grafiek met event-overlay (LinkedIn / Google / Meta / eigen platforms).
+**Richting:** directe API-koppelingen (LinkedIn Ads, Google Ads, Google Analytics) zodat alle databronnen op één tijdlijn samenkomen. Geen AI-laag — jij beoordeelt de data zelf.
 
-View your app in AI Studio: https://ai.studio/apps/drive/16DSNZSOSbpqsbfNPvWByAdWlvwOyltuY
+## Starten
 
-## Run Locally
+Vereist: Node.js
 
-**Prerequisites:**  Node.js
+```bash
+npm install
+npm run dev
+```
 
+Bouwen voor productie: `npm run build`
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Let op
+
+Data wordt nog **niet opgeslagen** — alles staat in het geheugen en is weg na een refresh. Persistentie is de eerstvolgende stap (zie CLAUDE.md voor de technische stand van zaken).
