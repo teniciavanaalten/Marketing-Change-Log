@@ -180,7 +180,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
 
                 {/* Expanded Sub-menu */}
                 {!collapsed && isExpanded && (
-                  <div className="ml-4 pl-3 border-l one-border-slate-100 dark:border-slate-700 space-y-1">
+                  <div className="ml-4 pl-3 border-l border-slate-100 dark:border-slate-700 space-y-1">
                     {/* Overview Link */}
                     <button
                       onClick={(e) => selectOverview(e, platform.id)}
@@ -223,21 +223,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, setMobileOpen }) =
             );
           })}
         </nav>
-
-        {/* Footer/User Info */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-700">
-          <div className={`flex items-center gap-3 ${collapsed ? 'justify-center' : ''}`}>
-            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-200">
-              DM
-            </div>
-            {!collapsed && (
-              <div className="overflow-hidden">
-                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">Demo Marketer</p>
-                <p className="text-xs text-slate-500 truncate">Pro Plan</p>
-              </div>
-            )}
-          </div>
-        </div>
       </aside >
 
       <PlatformManagerModal

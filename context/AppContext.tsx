@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Platform, DateRange, User, MetricDefinition, PlatformDefinition, Campaign, ChangeTypeDefinition } from '../types';
+import { Platform, DateRange, MetricDefinition, PlatformDefinition, Campaign, ChangeTypeDefinition } from '../types';
 import { DEFAULT_METRICS_TEMPLATE, DEFAULT_PLATFORMS, DEFAULT_CHANGE_TYPES_TEMPLATE } from '../constants';
 import { dataService } from '../services/dataService';
 
@@ -17,9 +17,6 @@ interface AppContextType {
   refreshCampaigns: () => Promise<void>;
   dateRange: DateRange;
   setDateRange: (range: DateRange) => void;
-  user: User | null;
-  login: () => void;
-  logout: () => void;
   metricsConfig: MetricDefinition[];
   addMetric: (metric: MetricDefinition) => void;
   removeMetric: (key: string, platform: Platform) => void;
@@ -38,7 +35,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('linkedin');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [user, setUser] = useState<User | null>({ id: '1', name: 'Demo Marketer', email: 'demo@marketer.io' });
 
   // Initialize metrics with defaults for ALL default platforms
   // Note: For custom platforms added later, we add metrics dynamically
@@ -73,51 +69,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [theme]);
 
-  // Load campaigns when platform changes or initially
+  // Load campaigns for all platforms so the sidebar can list them per platform
   const refreshCampaigns = async () => {
     try {
-      // We load ALL campaigns so sidebar can show them, or filter by platform there
-      // simpler to load all or just filter inside dataService if needed.
-      // For now, let's load all campaigns efficiently or just for selected?
-      // Sidebar needs to show campaigns for ALL platforms if we want to expand them.
-      // So let's fetch all. But dataService.getCampaigns takes a platform arg.
-      // Let's modify usage or assume we want mainly for selected platform?
-      // Wait, Sidebar design: user clicks platform -> sees campaigns.
-      // If we want to show campaigns nested under each platform in sidebar, we need ALL campaigns or fetch on demand.
-      // For simplicity, let's fetch for the selected platform whenever it changes, 
-      // BUT if we want to show counts or lists in sidebar for other platforms, we might need more.
-      // Actually, let's stick to: we need campaigns for the current view. 
-      // BUT Sidebar wants to list them. 
-      // Let's try to fetch all if possible, or iterate.
-      // dataService.getCampaigns(platform) -- let's optimize this later.
-      // For now, let's just fetch for the CURRENT platform to update the context 'campaigns' 
-      // effectively making 'campaigns' local to the selected platform?
-      // NO, if we want the sidebar to always show them, we need a better strategy. 
-      // Let's change this: `campaigns` in context will hold campaigns for the SELECTED platform 
-      // OR we change dataService to return all.
-      // Be careful. unique IDs across platforms?
-
-      // Let's just fetch for the selected platform for now to preserve existing logic flow,
-      // and maybe Sidebar only shows campaigns for the *active* platform?
-      // "When a platform is expanded..." - usually implies accordion.
-      // If I expand LinkedIn, I see LinkedIn campaigns. 
-      // If I expand Facebook, I see Facebook campaigns.
-      // So I might need all campaigns loaded.
-
-      // Let's iterate all platforms to get all campaigns?
-      // That might be expensive.
-      // Let's just store "all campaigns" in a flat list in context?
-
-      // Temporary solution: Fetch for selected platform, update that list.
-      // Wait, if I change platform, I lose the others?
-      // If I want to render them in sidebar, I need them.
-
-      // Let's make `refreshCampaigns` fetch for the *selected* platform and maybe we only show them for the selected one in Sidebar?
-      // Plan says: "When a platform is expanded: Show Overview link... Show list of Campaigns".
-      // This implies we could fetch when expanded.
-
-      // Let's start by just fetching for ALL platforms effectively?
-      // Or just fetch for current.
       const all: Campaign[] = [];
       for (const p of platforms) {
         const c = await dataService.getCampaigns(p.id);
@@ -135,14 +89,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
-
-  const login = () => {
-    setUser({ id: '1', name: 'Demo Marketer', email: 'demo@marketer.io' });
-  };
-
-  const logout = () => {
-    setUser(null);
   };
 
   const addPlatform = (def: Omit<PlatformDefinition, 'id'>) => {
@@ -236,9 +182,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       refreshCampaigns,
       dateRange,
       setDateRange,
-      user,
-      login,
-      logout,
       metricsConfig,
       addMetric,
       removeMetric,

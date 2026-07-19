@@ -12,6 +12,13 @@ Deliberate product decisions:
 
 The owner is a non-developer ("vibe coder") working in Dutch. Explain changes in plain language, keep steps small, and never assume a human will review the code after you.
 
+## Working agreement
+
+The owner wants tokens spent as efficiently as possible:
+- The main session plans and writes the spec; **implementation work is delegated to subagents** whenever the task is well-defined enough to hand off. The main session verifies the result (build + spot-check) instead of re-reading everything.
+- Keep the product simple: it should become a data **cockpit**, not a feature zoo. When in doubt, leave a feature out.
+- Verify with `npm run build` — it's the only automated check this repo has.
+
 ## Commands
 
 ```bash

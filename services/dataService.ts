@@ -40,6 +40,16 @@ export const dataService = {
     return newLog;
   },
 
+  updateChangeLog: async (id: string, updates: Omit<ChangeLog, 'id'>): Promise<ChangeLog> => {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const updatedLog = { ...updates, id };
+    const idx = mockDb.logs.findIndex(l => l.id === id);
+    if (idx >= 0) {
+      mockDb.logs[idx] = updatedLog;
+    }
+    return updatedLog;
+  },
+
   deleteChangeLog: async (id: string): Promise<void> => {
     mockDb.logs = mockDb.logs.filter(l => l.id !== id);
   },

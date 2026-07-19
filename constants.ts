@@ -29,13 +29,6 @@ export const DEFAULT_CHANGE_TYPES_TEMPLATE: Omit<ChangeTypeDefinition, 'platform
   { id: 'ad-copy-changed', label: 'Ad copy changed' },
 ];
 
-export const MOCK_CAMPAIGNS = [
-  "Q3 Lead Gen - USA",
-  "Retargeting - All Visitors",
-  "Brand Awareness - Top Funnel",
-  "Competitor Conquesting",
-];
-
 // Default definitions used to seed the configuration
 // We omit 'platform' here as it gets assigned during seeding
 export const DEFAULT_METRICS_TEMPLATE: Omit<MetricDefinition, 'platform'>[] = [
@@ -45,5 +38,6 @@ export const DEFAULT_METRICS_TEMPLATE: Omit<MetricDefinition, 'platform'>[] = [
   { key: 'conversions', label: 'Conversions', format: 'number', aggregation: 'sum' },
   { key: 'ctr', label: 'CTR', format: 'percent', aggregation: 'average', isDerived: true },
   { key: 'cpc', label: 'CPC', format: 'currency', aggregation: 'average', isDerived: true },
+  { key: 'cpa', label: 'CPA', format: 'currency', aggregation: 'average', isDerived: true },
   { key: 'conversionRate', label: 'Conv. Rate', format: 'percent', aggregation: 'average', isDerived: true },
 ];

@@ -16,6 +16,42 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport, de
   const [status, setStatus] = useState<'idle' | 'parsing' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
+  // Split a single CSV line into fields, handling quoted fields that
+  // contain commas and escaped double quotes ("").
+  const parseCsvLine = (line: string): string[] => {
+    const fields: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (inQuotes) {
+        if (char === '"') {
+          if (line[i + 1] === '"') {
+            current += '"'; // Escaped quote
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          current += char;
+        }
+      } else {
+        if (char === '"') {
+          inQuotes = true;
+        } else if (char === ',') {
+          fields.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+    }
+    fields.push(current.trim());
+    return fields;
+  };
+
   // Helper to parse various date formats
   const parseDate = (rawDate: string): string | null => {
     if (!rawDate) return null;
@@ -66,7 +102,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport, de
 
         if (lines.length < 2) throw new Error("File appears empty");
 
-        const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+        const headers = parseCsvLine(lines[0].toLowerCase());
         const getIndex = (keys: string[]) => headers.findIndex(h => keys.some(k => h === k || h.includes(k)));
 
         // Always look for Date
@@ -83,7 +119,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport, de
           // Heuristic for matching headers: try exact label, or key, or common synonyms
           let searchTerms = [m.label.toLowerCase(), m.key.toLowerCase()];
           if (m.key === 'impressions') searchTerms.push('views', 'imps', 'impr');
-          if (m.key === 'spend') searchTerms.push('cost', 'amount', 'avg. cpc'); // 'avg. cpc' sometimes header for cost column in weird CSVs, but be careful
+          if (m.key === 'spend') searchTerms.push('cost', 'amount');
           if (m.key === 'conversions') searchTerms.push('conv', 'leads');
 
           return {
@@ -99,7 +135,7 @@ export const CsvUploader: React.FC<CsvUploaderProps> = ({ platform, onImport, de
         let skippedRows = 0;
 
         for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+          const cols = parseCsvLine(lines[i]);
           if (cols.length < 2) continue;
 
           let rawDate = useFirstColDate ? cols[0] : cols[dateIdx];

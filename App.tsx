@@ -37,6 +37,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState<ChangeLog | null>(null);
   const [isDataModalOpen, setIsDataModalOpen] = useState(false);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [isMetricModalOpen, setIsMetricModalOpen] = useState(false);
@@ -70,6 +71,21 @@ const Dashboard = () => {
     if (newLog.date >= dateRange.start && newLog.date <= dateRange.end) {
       setLogs(prev => [newLog, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
     }
+  };
+
+  const handleUpdateLog = async (id: string, logData: Omit<ChangeLog, 'id'>) => {
+    const updatedLog = await dataService.updateChangeLog(id, logData);
+    setLogs(prev =>
+      prev
+        .map(l => (l.id === id ? updatedLog : l))
+        .filter(l => l.date >= dateRange.start && l.date <= dateRange.end)
+        .sort((a, b) => b.date.localeCompare(a.date))
+    );
+  };
+
+  const handleEditLog = (log: ChangeLog) => {
+    setEditingLog(log);
+    setIsLogModalOpen(true);
   };
 
   const handleDeleteLog = async (id: string) => {
@@ -199,19 +215,20 @@ const Dashboard = () => {
             <Button size="sm" variant="outline" onClick={() => setIsCampaignModalOpen(true)} className="hidden sm:flex">
               Campaigns
             </Button>
-            <Button size="sm" icon={<Plus size={16} />} onClick={() => setIsLogModalOpen(true)}>
+            <Button size="sm" icon={<Plus size={16} />} onClick={() => { setEditingLog(null); setIsLogModalOpen(true); }}>
               Log Change
             </Button>
           </div>
         }
       >
-        <ChangeLogTable logs={filteredLogs} onDelete={handleDeleteLog} isLoading={loading} />
+        <ChangeLogTable logs={filteredLogs} onDelete={handleDeleteLog} onEdit={handleEditLog} isLoading={loading} />
       </Card>
 
       <AddChangeModal
         isOpen={isLogModalOpen}
-        onClose={() => setIsLogModalOpen(false)}
-        onSubmit={handleAddLog}
+        onClose={() => { setIsLogModalOpen(false); setEditingLog(null); }}
+        onSubmit={(logData) => editingLog ? handleUpdateLog(editingLog.id, logData) : handleAddLog(logData)}
+        editingLog={editingLog}
         platform={selectedPlatform}
         campaigns={campaigns} // Pass global campaigns
         onManageCampaigns={() => {

@@ -1,14 +1,15 @@
 import React from 'react';
 import { ChangeLog } from '../../types';
-import { Trash2, Tag, Calendar, Edit2 } from 'lucide-react';
+import { Trash2, Tag, Edit2 } from 'lucide-react';
 
 interface ChangeLogTableProps {
   logs: ChangeLog[];
   onDelete: (id: string) => void;
+  onEdit: (log: ChangeLog) => void;
   isLoading: boolean;
 }
 
-export const ChangeLogTable: React.FC<ChangeLogTableProps> = ({ logs, onDelete, isLoading }) => {
+export const ChangeLogTable: React.FC<ChangeLogTableProps> = ({ logs, onDelete, onEdit, isLoading }) => {
   if (isLoading) {
     return <div className="space-y-4">
       {[1,2,3].map(i => <div key={i} className="h-16 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" />)}
@@ -71,11 +72,14 @@ export const ChangeLogTable: React.FC<ChangeLogTableProps> = ({ logs, onDelete, 
 
               {/* Actions */}
               <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                 {/* Placeholder for Edit - Just to show UI capability */}
-                 {/* <button className="p-2 text-slate-400 hover:text-blue-500 transition-colors">
+                <button
+                  onClick={() => onEdit(log)}
+                  className="p-2 text-slate-400 hover:text-blue-500 transition-colors"
+                  title="Edit Log"
+                >
                   <Edit2 size={16} />
-                </button> */}
-                <button 
+                </button>
+                <button
                   onClick={() => onDelete(log.id)}
                   className="p-2 text-slate-400 hover:text-red-500 transition-colors"
                   title="Delete Log"

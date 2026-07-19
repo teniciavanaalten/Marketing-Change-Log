@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Plus, Settings } from 'lucide-react';
 import { ChangeLog, Platform, Campaign, ChangeTypeDefinition } from '../../types';
 import { Button } from '../UI/Button';
@@ -12,6 +12,7 @@ interface AddChangeModalProps {
   onManageCampaigns: () => void;
   changeTypes: ChangeTypeDefinition[];
   onManageChangeTypes: () => void;
+  editingLog?: ChangeLog | null; // When set, the modal edits this log instead of creating a new one
 }
 
 export const AddChangeModal: React.FC<AddChangeModalProps> = ({
@@ -22,7 +23,8 @@ export const AddChangeModal: React.FC<AddChangeModalProps> = ({
   campaigns,
   onManageCampaigns,
   changeTypes,
-  onManageChangeTypes
+  onManageChangeTypes,
+  editingLog = null
 }) => {
   const [formData, setFormData] = useState({
     campaignName: '',
@@ -31,6 +33,30 @@ export const AddChangeModal: React.FC<AddChangeModalProps> = ({
     date: new Date().toISOString().split('T')[0],
     tags: ''
   });
+
+  const isEditMode = !!editingLog;
+
+  // Pre-fill the form when opening in edit mode; reset when opening in add mode
+  useEffect(() => {
+    if (!isOpen) return;
+    if (editingLog) {
+      setFormData({
+        campaignName: editingLog.campaignName,
+        changeType: editingLog.changeType,
+        description: editingLog.description,
+        date: editingLog.date,
+        tags: editingLog.tags.join(', ')
+      });
+    } else {
+      setFormData({
+        campaignName: '',
+        changeType: '',
+        description: '',
+        date: new Date().toISOString().split('T')[0],
+        tags: ''
+      });
+    }
+  }, [isOpen, editingLog]);
 
   if (!isOpen) return null;
 
@@ -66,7 +92,7 @@ export const AddChangeModal: React.FC<AddChangeModalProps> = ({
       {/* Modal Content */}
       <div className="relative bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-700">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-white">Log New Change</h2>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">{isEditMode ? 'Edit Change' : 'Log New Change'}</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
             <X size={20} />
           </button>
@@ -163,7 +189,7 @@ export const AddChangeModal: React.FC<AddChangeModalProps> = ({
 
           <div className="pt-2 flex justify-end gap-3">
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button type="submit">Save Change</Button>
+            <Button type="submit">{isEditMode ? 'Update Change' : 'Save Change'}</Button>
           </div>
         </form>
       </div>

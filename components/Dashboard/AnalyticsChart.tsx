@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { 
-  ComposedChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  ComposedChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   Legend,
+  ReferenceLine,
 } from 'recharts';
 import { DailyMetric, ChangeLog, MetricKey } from '../../types';
 import { CHART_COLORS, BRAND_COLOR } from '../../constants';
@@ -23,7 +24,10 @@ interface AnalyticsChartProps {
 type Granularity = 'daily' | 'weekly' | 'monthly';
 
 export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeLogs, isLoading }) => {
-  const { theme, metricsConfig, selectedPlatform } = useApp();
+  const { theme, metricsConfig, selectedPlatform, platforms, dateRange } = useApp();
+
+  // Color used for change-event marker lines: the platform's accent, or brand fallback
+  const eventColor = platforms.find(p => p.id === selectedPlatform)?.color || BRAND_COLOR;
   
   // State
   const [selectedMetrics, setSelectedMetrics] = useState<MetricKey[]>([]);
@@ -97,40 +101,67 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
   const chartData = useMemo(() => {
     if (metrics.length === 0) return [];
 
-    // 1. Group metrics based on granularity
+    // Resolve the bucket (key + representative date) for a YYYY-MM-DD string
+    const getBucket = (dateStr: string): { key: string; dateObj: Date } => {
+      const dateObj = new Date(dateStr);
+      if (granularity === 'weekly') {
+        const startOfWeek = getStartOfWeek(dateObj);
+        return { key: startOfWeek.toISOString().split('T')[0], dateObj: startOfWeek };
+      }
+      if (granularity === 'monthly') {
+        const startOfMonth = getStartOfMonth(dateObj);
+        return { key: startOfMonth.toISOString().split('T')[0], dateObj: startOfMonth };
+      }
+      return { key: dateStr, dateObj };
+    };
+
+    // 1. Build buckets for EVERY day in the selected date range,
+    // so events on days without metric rows still get a slot on the axis.
     const groupedData = new Map<string, {
       dateObj: Date;
       rawAgg: Record<string, number>; // Stores sum of raw values
       countAgg: Record<string, number>; // Stores count of records (for averages)
       changeLogs: ChangeLog[];
+      hasData: boolean; // Whether any metric row landed in this bucket
     }>();
 
-    metrics.forEach(m => {
-      const dateObj = new Date(m.date);
-      let key = m.date; 
-      let groupDate = dateObj;
+    const startTime = new Date(dateRange.start).getTime();
+    const endTime = new Date(dateRange.end).getTime();
+    if (isNaN(startTime) || isNaN(endTime) || startTime > endTime) return [];
 
-      if (granularity === 'weekly') {
-        const startOfWeek = getStartOfWeek(dateObj);
-        key = startOfWeek.toISOString().split('T')[0];
-        groupDate = startOfWeek;
-      } else if (granularity === 'monthly') {
-        const startOfMonth = getStartOfMonth(dateObj);
-        key = startOfMonth.toISOString().split('T')[0];
-        groupDate = startOfMonth;
-      }
-
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    for (let t = startTime; t <= endTime; t += DAY_MS) {
+      const dayStr = new Date(t).toISOString().split('T')[0];
+      const { key, dateObj } = getBucket(dayStr);
       if (!groupedData.has(key)) {
         groupedData.set(key, {
-          dateObj: groupDate,
+          dateObj,
           rawAgg: {},
           countAgg: {},
-          changeLogs: []
+          changeLogs: [],
+          hasData: false
+        });
+      }
+    }
+
+    // 2. Aggregate metric rows into their buckets
+    metrics.forEach(m => {
+      const { key, dateObj } = getBucket(m.date);
+
+      if (!groupedData.has(key)) {
+        // Metric row outside the built range (defensive) — still show it
+        groupedData.set(key, {
+          dateObj,
+          rawAgg: {},
+          countAgg: {},
+          changeLogs: [],
+          hasData: false
         });
       }
 
       const entry = groupedData.get(key)!;
-      
+      entry.hasData = true;
+
       // Aggregate all active metrics
       platformMetrics.forEach(def => {
         if (def.isDerived) return; // Skip derived metrics like CTR for raw aggregation
@@ -146,12 +177,17 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
         entry.rawAgg[def.key] = (entry.rawAgg[def.key] || 0) + val;
         entry.countAgg[def.key] = (entry.countAgg[def.key] || 0) + 1;
       });
-
-      const daysLogs = changeLogs.filter(l => l.date === m.date);
-      entry.changeLogs.push(...daysLogs);
     });
 
-    // 2. Aggregate and Calculate Derived Metrics
+    // 3. Map every change-log event into its containing bucket,
+    // independent of whether that bucket has metric data
+    changeLogs.forEach(l => {
+      const { key } = getBucket(l.date);
+      const entry = groupedData.get(key);
+      if (entry) entry.changeLogs.push(l);
+    });
+
+    // 4. Aggregate and Calculate Derived Metrics
     let result = Array.from(groupedData.values())
       .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())
       .map(entry => {
@@ -172,12 +208,21 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
            processedRow.fullDate = entry.dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
         }
 
+        // Buckets without any metric rows get null values so lines can
+        // skip over them (rendered with connectNulls)
+        if (!entry.hasData) {
+          platformMetrics.forEach(def => {
+            processedRow[def.key] = null;
+          });
+          return processedRow;
+        }
+
         // Process non-derived metrics
         platformMetrics.forEach(def => {
            if (!def.isDerived) {
              const total = entry.rawAgg[def.key] || 0;
              const count = entry.countAgg[def.key] || 1;
-             
+
              if (def.aggregation === 'average' && count > 0) {
                processedRow[def.key] = parseFloat((total / count).toFixed(2));
              } else {
@@ -200,7 +245,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
              if (def.key === 'cpc') val = clicks > 0 ? spend / clicks : 0;
              if (def.key === 'conversionRate') val = clicks > 0 ? (conv / clicks) * 100 : 0;
              if (def.key === 'cpa') val = conv > 0 ? spend / conv : 0;
-             
+
              processedRow[def.key] = parseFloat(val.toFixed(2));
           }
         });
@@ -208,7 +253,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
         return processedRow;
       });
 
-    // 3. Normalize Data (0-100 Scale)
+    // 5. Normalize Data (0-100 Scale)
     // We calculate this regardless so the data keys exist
     const maxValues: Record<string, number> = {};
     selectedMetrics.forEach(key => {
@@ -217,16 +262,17 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
     });
 
     result = result.map(d => {
-      const normalizedProps: Record<string, number> = {};
+      const normalizedProps: Record<string, number | null> = {};
       selectedMetrics.forEach(key => {
-        const val = (d as any)[key] || 0;
-        normalizedProps[`${key}_norm`] = (val / maxValues[key]) * 100;
+        const val = (d as any)[key];
+        // Preserve nulls so connectNulls can bridge missing days
+        normalizedProps[`${key}_norm`] = val == null ? null : (val / maxValues[key]) * 100;
       });
       return { ...d, ...normalizedProps };
     });
 
     return result;
-  }, [metrics, changeLogs, granularity, platformMetrics, selectedMetrics]);
+  }, [metrics, changeLogs, granularity, platformMetrics, selectedMetrics, dateRange]);
 
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -282,23 +328,6 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
       );
     }
     return null;
-  };
-
-  const CustomDot = (props: any) => {
-    const { cx, cy, payload, stroke } = props;
-    if (payload.hasChange) {
-      const primaryDataKey = isSingleMetric ? selectedMetrics[0] : `${selectedMetrics[0]}_norm`;
-      
-      if (props.dataKey === primaryDataKey) {
-        return (
-            <g>
-              <line x1={cx} y1={cy} x2={cx} y2={300} stroke={BRAND_COLOR} strokeDasharray="3 3" opacity={0.4} />
-              <circle cx={cx} cy={cy} r={4} fill={stroke} stroke="white" strokeWidth={2} />
-            </g>
-        );
-      }
-    }
-    return null; 
   };
 
   if (isLoading) {
@@ -419,7 +448,26 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
             />
             
             <Tooltip content={<CustomTooltip />} />
-            
+
+            {/* Change-log events as full-height dashed marker lines */}
+            {chartData.filter((d: any) => d.hasChange).map((d: any) => (
+              <ReferenceLine
+                key={`event-${d.displayDate}`}
+                x={d.displayDate}
+                stroke={eventColor}
+                strokeDasharray="4 4"
+                strokeOpacity={0.6}
+                label={d.changeLogs.length > 1 ? {
+                  value: `${d.changeLogs.length}×`,
+                  position: 'top',
+                  fill: eventColor,
+                  fontSize: 10,
+                  fontWeight: 700
+                } : undefined}
+              />
+            ))}
+
+
             <Legend 
               wrapperStyle={{ paddingTop: '10px' }}
               formatter={(value) => <span style={{ color: theme === 'dark' ? '#e2e8f0' : '#334155', fontSize: '12px', fontWeight: 500 }}>{value}</span>}
@@ -435,9 +483,10 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
                   // If single metric, use raw value, else use normalized value
                   dataKey={isSingleMetric ? metricKey : `${metricKey}_norm`}
                   name={metricConfig?.label || metricKey}
-                  stroke={CHART_COLORS[index % CHART_COLORS.length]} 
+                  stroke={CHART_COLORS[index % CHART_COLORS.length]}
                   strokeWidth={2}
-                  dot={<CustomDot />}
+                  dot={false}
+                  connectNulls
                   activeDot={{ r: 5, strokeWidth: 0 }}
                   isAnimationActive={false} // Smoother toggling
                 />

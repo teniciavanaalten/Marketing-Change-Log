@@ -68,12 +68,6 @@ export interface MetricDefinition {
   isDerived?: boolean; // If true, this metric is calculated (e.g. CTR), not imported
 }
 
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-}
-
 export interface Campaign {
   id: string;
   name: string;
