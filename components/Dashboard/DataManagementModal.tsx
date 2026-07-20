@@ -1,16 +1,36 @@
-import React from 'react';
-import { X, Trash2, FileText, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Trash2, FileText, Calendar, RotateCcw, Eraser } from 'lucide-react';
 import { ImportRecord } from '../../types';
-import { Button } from '../UI/Button';
 
 interface DataManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
   imports: ImportRecord[];
   onDelete: (id: string) => void;
+  onResetDemo: () => Promise<void>;
+  onClearAll: () => Promise<void>;
 }
 
-export const DataManagementModal: React.FC<DataManagementModalProps> = ({ isOpen, onClose, imports, onDelete }) => {
+export const DataManagementModal: React.FC<DataManagementModalProps> = ({ isOpen, onClose, imports, onDelete, onResetDemo, onClearAll }) => {
+  // Two-step inline confirm (no browser confirm() dialog)
+  const [confirm, setConfirm] = useState<null | 'demo' | 'clear'>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (which: 'demo' | 'clear') => {
+    if (confirm !== which) {
+      setConfirm(which);
+      return;
+    }
+    setBusy(true);
+    try {
+      await (which === 'demo' ? onResetDemo() : onClearAll());
+    } finally {
+      setBusy(false);
+      setConfirm(null);
+      onClose();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -72,8 +92,40 @@ export const DataManagementModal: React.FC<DataManagementModalProps> = ({ isOpen
           )}
         </div>
         
-        <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-500 flex-shrink-0">
-           Deleting an import will remove all metrics associated with that file from your analytics graphs.
+        <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0 space-y-3">
+          <p className="text-xs text-slate-500">
+            Deleting an import will remove all metrics associated with that file from your analytics graphs.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-dashed border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => run('demo')}
+              disabled={busy}
+              onMouseLeave={() => confirm === 'demo' && setConfirm(null)}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50
+                ${confirm === 'demo'
+                  ? 'bg-brand-500 text-white hover:bg-brand-600'
+                  : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-brand-500'
+                }`}
+            >
+              <RotateCcw size={14} />
+              {confirm === 'demo' ? 'Klik nogmaals om te bevestigen' : 'Reset naar demo'}
+            </button>
+
+            <button
+              onClick={() => run('clear')}
+              disabled={busy}
+              onMouseLeave={() => confirm === 'clear' && setConfirm(null)}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50
+                ${confirm === 'clear'
+                  ? 'bg-red-500 text-white hover:bg-red-600'
+                  : 'bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-red-500'
+                }`}
+            >
+              <Eraser size={14} />
+              {confirm === 'clear' ? 'Klik nogmaals om te bevestigen' : 'Wis alle data'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

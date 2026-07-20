@@ -30,7 +30,8 @@ const Dashboard = () => {
     changeTypesConfig,
     addChangeType,
     removeChangeType,
-    platforms
+    platforms,
+    resetConfigToDefaults
   } = useApp();
 
   const isMasterView = selectedPlatform === MASTER_VIEW_ID;
@@ -105,6 +106,22 @@ const Dashboard = () => {
   const handleDeleteImport = async (id: string) => {
     await dataService.deleteImport(id);
     await refreshData();
+  };
+
+  // Clears all melon storage, re-seeds the demo dataset, refreshes the UI
+  const handleResetDemo = async () => {
+    await dataService.resetToDemo();
+    resetConfigToDefaults();
+    await refreshData();
+    await refreshCampaigns();
+  };
+
+  // Clears all melon storage and data; config back to defaults, refreshes the UI
+  const handleClearAll = async () => {
+    await dataService.clearAllData();
+    resetConfigToDefaults();
+    await refreshData();
+    await refreshCampaigns();
   };
 
   const handleAddCampaign = async (name: string) => {
@@ -338,6 +355,8 @@ const Dashboard = () => {
         onClose={() => setIsDataModalOpen(false)}
         imports={imports}
         onDelete={handleDeleteImport}
+        onResetDemo={handleResetDemo}
+        onClearAll={handleClearAll}
       />
 
       <CampaignManagerModal

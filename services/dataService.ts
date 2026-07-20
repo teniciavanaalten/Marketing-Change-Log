@@ -1,5 +1,13 @@
 import { ChangeLog, DailyMetric, Platform, ImportRecord, Campaign } from "../types";
 import { MASTER_VIEW_ID } from "../constants";
+import { load, save, hasKey, clearAllMelonStorage, storageKeys, SCHEMA_VERSION } from "./storage";
+
+type MockDb = {
+  logs: ChangeLog[];
+  metrics: DailyMetric[];
+  imports: ImportRecord[];
+  campaigns: Campaign[];
+};
 
 // --- Seeded demo dataset -----------------------------------------------------
 // A deterministic ~90-day B2B SaaS story (last 90 days ending today) so the
@@ -92,20 +100,55 @@ const seedDemoData = (): { metrics: DailyMetric[]; logs: ChangeLog[] } => {
   return { metrics, logs };
 };
 
-const seeded = seedDemoData();
+// --- Persistence -------------------------------------------------------------
+// mockDb is the in-memory cache; localStorage is the source of truth across
+// refreshes. Each mutation persists the affected collection.
+const persistMetrics = () => save(storageKeys.metrics, mockDb.metrics);
+const persistLogs = () => save(storageKeys.logs, mockDb.logs);
+const persistImports = () => save(storageKeys.imports, mockDb.imports);
+const persistCampaigns = () => save(storageKeys.campaigns, mockDb.campaigns);
 
-// In-memory store to simulate database
-let mockDb: {
-  logs: ChangeLog[];
-  metrics: DailyMetric[];
-  imports: ImportRecord[];
-  campaigns: Campaign[];
-} = {
-  logs: seeded.logs,
-  metrics: seeded.metrics,
-  imports: [],
-  campaigns: []
+const persistAll = () => {
+  persistMetrics();
+  persistLogs();
+  persistImports();
+  persistCampaigns();
+  save(storageKeys.schemaVersion, SCHEMA_VERSION);
 };
+
+const buildDemoDb = (): MockDb => {
+  const s = seedDemoData();
+  return { logs: s.logs, metrics: s.metrics, imports: [], campaigns: [] };
+};
+
+const emptyDb = (): MockDb => ({ logs: [], metrics: [], imports: [], campaigns: [] });
+
+// On module init: TRUE first load (no schemaVersion key) → seed the demo
+// dataset and write it. Otherwise hydrate from storage (never re-seed).
+const initDb = (): MockDb => {
+  if (!hasKey(storageKeys.schemaVersion)) {
+    const db = buildDemoDb();
+    mockDb = db; // assign before persistAll (it reads mockDb)
+    persistAll();
+    return db;
+  }
+  const storedVersion = load<number>(storageKeys.schemaVersion, SCHEMA_VERSION);
+  if (storedVersion !== SCHEMA_VERSION) {
+    console.warn(
+      `[melon] stored schemaVersion ${storedVersion} != ${SCHEMA_VERSION}; keeping data as-is (no migration).`
+    );
+  }
+  return {
+    logs: load<ChangeLog[]>(storageKeys.logs, []),
+    metrics: load<DailyMetric[]>(storageKeys.metrics, []),
+    imports: load<ImportRecord[]>(storageKeys.imports, []),
+    campaigns: load<Campaign[]>(storageKeys.campaigns, []),
+  };
+};
+
+// In-memory store (cache over localStorage)
+let mockDb: MockDb = emptyDb();
+mockDb = initDb();
 
 export const dataService = {
   getMetrics: async (platform: Platform, start: string, end: string): Promise<DailyMetric[]> => {
@@ -133,6 +176,7 @@ export const dataService = {
     await new Promise(resolve => setTimeout(resolve, 500));
     const newLog = { ...log, id: Math.random().toString(36).substr(2, 9) };
     mockDb.logs.unshift(newLog); // Add to beginning
+    persistLogs();
     return newLog;
   },
 
@@ -143,11 +187,13 @@ export const dataService = {
     if (idx >= 0) {
       mockDb.logs[idx] = updatedLog;
     }
+    persistLogs();
     return updatedLog;
   },
 
   deleteChangeLog: async (id: string): Promise<void> => {
     mockDb.logs = mockDb.logs.filter(l => l.id !== id);
+    persistLogs();
   },
 
   getImports: async (platform: Platform): Promise<ImportRecord[]> => {
@@ -190,6 +236,8 @@ export const dataService = {
       }
     });
 
+    persistImports();
+    persistMetrics();
     return record;
   },
 
@@ -200,6 +248,9 @@ export const dataService = {
 
     // Remove metrics associated with this import
     mockDb.metrics = mockDb.metrics.filter(m => m.importId !== importId);
+
+    persistImports();
+    persistMetrics();
   },
 
   // Campaign Management
@@ -216,11 +267,29 @@ export const dataService = {
       platform
     };
     mockDb.campaigns.push(newCampaign);
+    persistCampaigns();
     return newCampaign;
   },
 
   deleteCampaign: async (id: string): Promise<void> => {
     await new Promise(resolve => setTimeout(resolve, 300));
     mockDb.campaigns = mockDb.campaigns.filter(c => c.id !== id);
+    persistCampaigns();
+  },
+
+  // Reset all melon storage and re-seed the 90-day demo dataset.
+  resetToDemo: async (): Promise<void> => {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    clearAllMelonStorage();
+    mockDb = buildDemoDb();
+    persistAll();
+  },
+
+  // Clear all melon storage and all data (config resets to defaults elsewhere).
+  clearAllData: async (): Promise<void> => {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    clearAllMelonStorage();
+    mockDb = emptyDb();
+    persistAll();
   }
 };

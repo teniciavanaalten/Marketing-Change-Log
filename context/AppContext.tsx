@@ -2,6 +2,22 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Platform, DateRange, MetricDefinition, PlatformDefinition, Campaign, ChangeTypeDefinition } from '../types';
 import { DEFAULT_METRICS_TEMPLATE, DEFAULT_PLATFORMS, DEFAULT_CHANGE_TYPES_TEMPLATE, WEBSITE_CUSTOM_METRICS } from '../constants';
 import { dataService } from '../services/dataService';
+import { load, save, storageKeys } from '../services/storage';
+
+// Default config builders (reused for seeding, hydration fallback, and reset)
+const buildDefaultMetricsConfig = (): MetricDefinition[] => {
+  const base = DEFAULT_PLATFORMS.flatMap(p =>
+    DEFAULT_METRICS_TEMPLATE.map(m => ({ ...m, platform: p.id }))
+  );
+  // Website's custom metrics, registered like user-created custom metrics
+  const website = WEBSITE_CUSTOM_METRICS.map(m => ({ ...m, platform: 'website' }));
+  return [...base, ...website];
+};
+
+const buildDefaultChangeTypes = (): ChangeTypeDefinition[] =>
+  DEFAULT_PLATFORMS.flatMap(p =>
+    DEFAULT_CHANGE_TYPES_TEMPLATE.map(ct => ({ ...ct, platform: p.id }))
+  );
 
 interface AppContextType {
   theme: 'light' | 'dark';
@@ -25,34 +41,33 @@ interface AppContextType {
   addChangeType: (changeType: ChangeTypeDefinition) => void;
   removeChangeType: (id: string, platform: Platform) => void;
   resetChangeTypes: (platform: Platform) => void;
+  resetConfigToDefaults: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-  const [platforms, setPlatforms] = useState<PlatformDefinition[]>(DEFAULT_PLATFORMS);
+  // Config is persisted: hydrate from localStorage, falling back to defaults.
+  // (selectedPlatform / dateRange / campaigns are transient — not persisted.)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => load<'light' | 'dark'>(storageKeys.theme, 'light'));
+  const [platforms, setPlatforms] = useState<PlatformDefinition[]>(() => load(storageKeys.platforms, DEFAULT_PLATFORMS));
   const [selectedPlatform, setSelectedPlatform] = useState<Platform>('linkedin');
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
 
-  // Initialize metrics with defaults for ALL default platforms
-  // Note: For custom platforms added later, we add metrics dynamically
-  const [metricsConfig, setMetricsConfig] = useState<MetricDefinition[]>(() => {
-    const base = DEFAULT_PLATFORMS.flatMap(p =>
-      DEFAULT_METRICS_TEMPLATE.map(m => ({ ...m, platform: p.id }))
-    );
-    // Website's custom metrics, registered like user-created custom metrics
-    const website = WEBSITE_CUSTOM_METRICS.map(m => ({ ...m, platform: 'website' }));
-    return [...base, ...website];
-  });
+  const [metricsConfig, setMetricsConfig] = useState<MetricDefinition[]>(() =>
+    load(storageKeys.metricsConfig, buildDefaultMetricsConfig())
+  );
 
-  // Initialize change types with defaults for ALL default platforms
-  const [changeTypesConfig, setChangeTypesConfig] = useState<ChangeTypeDefinition[]>(() => {
-    return DEFAULT_PLATFORMS.flatMap(p =>
-      DEFAULT_CHANGE_TYPES_TEMPLATE.map(ct => ({ ...ct, platform: p.id }))
-    );
-  });
+  const [changeTypesConfig, setChangeTypesConfig] = useState<ChangeTypeDefinition[]>(() =>
+    load(storageKeys.changeTypes, buildDefaultChangeTypes())
+  );
+
+  // Persist config on change (transient UI state is never persisted)
+  useEffect(() => { save(storageKeys.theme, theme); }, [theme]);
+  useEffect(() => { save(storageKeys.platforms, platforms); }, [platforms]);
+  useEffect(() => { save(storageKeys.metricsConfig, metricsConfig); }, [metricsConfig]);
+  useEffect(() => { save(storageKeys.changeTypes, changeTypesConfig); }, [changeTypesConfig]);
 
   // Default date range: Last 30 days
   const today = new Date();
@@ -170,6 +185,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  // Reset ALL config back to defaults (used by the reset/clear data controls).
+  // Save-effects re-persist the new defaults.
+  const resetConfigToDefaults = () => {
+    setPlatforms(DEFAULT_PLATFORMS);
+    setMetricsConfig(buildDefaultMetricsConfig());
+    setChangeTypesConfig(buildDefaultChangeTypes());
+    setSelectedPlatform('linkedin');
+    setSelectedCampaignId(null);
+  };
+
   return (
     <AppContext.Provider value={{
       theme,
@@ -192,7 +217,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       changeTypesConfig,
       addChangeType,
       removeChangeType,
-      resetChangeTypes
+      resetChangeTypes,
+      resetConfigToDefaults
     }}>
       {children}
     </AppContext.Provider>
