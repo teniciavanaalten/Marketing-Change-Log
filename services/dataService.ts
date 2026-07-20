@@ -1,6 +1,99 @@
 import { ChangeLog, DailyMetric, Platform, ImportRecord, Campaign } from "../types";
 import { MASTER_VIEW_ID } from "../constants";
 
+// --- Seeded demo dataset -----------------------------------------------------
+// A deterministic ~90-day B2B SaaS story (last 90 days ending today) so the
+// Cockpit's correlation mode demonstrates the concept instantly.
+// Story: LinkedIn ABM campaign goes live around day 25 → website sessions lift
+// ~+25% three days later → branded search climbs ~+40% two weeks later →
+// demo requests lift from ~day 50. Google Ads budget increase around day 60.
+const seedDemoData = (): { metrics: DailyMetric[]; logs: ChangeLog[] } => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const DAYS = 90;
+  const metrics: DailyMetric[] = [];
+
+  // Deterministic pseudo-random in [0, 1): fixed formula, no Math.random
+  const noise = (i: number, salt: number) => {
+    const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  const endUtc = new Date(new Date().toISOString().split('T')[0]).getTime();
+  const startUtc = endUtc - (DAYS - 1) * DAY_MS;
+  const dateAt = (i: number) => new Date(startUtc + i * DAY_MS).toISOString().split('T')[0];
+
+  for (let i = 0; i < DAYS; i++) {
+    const d = new Date(startUtc + i * DAY_MS);
+    const dow = d.getUTCDay();
+    const wk = (dow === 0 || dow === 6) ? 0.6 : 1; // Weekly seasonality: quieter weekends
+
+    // LinkedIn: modest baseline; ABM campaign live from day 25
+    const abm = i >= 25;
+    const liImps = Math.round((abm ? 9000 : 3500) * wk * (0.85 + 0.3 * noise(i, 1)));
+    const liClicks = Math.round(liImps * (0.004 + 0.002 * noise(i, 2)));
+    const liSpend = Math.round((abm ? 260 : 90) * wk * (0.85 + 0.3 * noise(i, 3)));
+    const liConv = (i >= 50 ? (noise(i, 4) > 0.5 ? 1 : 0) + (noise(i, 14) > 0.75 ? 1 : 0) : (noise(i, 4) > 0.85 ? 1 : 0));
+    metrics.push({
+      date: dateAt(i), platform: 'linkedin',
+      impressions: liImps, clicks: liClicks, spend: liSpend, conversions: liConv,
+      customMetrics: {}
+    });
+
+    // Google: modest baseline; budget increased from day 60
+    const gBoost = i >= 60 ? 1.6 : 1;
+    const gImps = Math.round(6000 * wk * gBoost * (0.85 + 0.3 * noise(i, 5)));
+    const gClicks = Math.round(gImps * (0.025 + 0.01 * noise(i, 6)));
+    const gSpend = Math.round(120 * wk * gBoost * (0.85 + 0.3 * noise(i, 7)));
+    const gConv = Math.round(gClicks * (0.02 + 0.015 * noise(i, 8)));
+    metrics.push({
+      date: dateAt(i), platform: 'google',
+      impressions: gImps, clicks: gClicks, spend: gSpend, conversions: gConv,
+      customMetrics: {}
+    });
+
+    // Website: sessions lift +25% from day 28, branded search +40% from day 39,
+    // demo requests lift from day 50
+    const sessLift = i >= 28 ? 1.25 : 1;
+    const brandLift = i >= 39 ? 1.4 : 1;
+    const demoLift = i >= 50 ? 1.9 : 1;
+    const sessions = Math.round(200 * wk * sessLift * (0.85 + 0.3 * noise(i, 9)));
+    const brandedSearch = Math.round(30 * wk * brandLift * (0.8 + 0.4 * noise(i, 10)));
+    const demoRequests = Math.round(1.5 * demoLift * (0.4 + 1.2 * noise(i, 11)));
+    metrics.push({
+      date: dateAt(i), platform: 'website',
+      impressions: 0, clicks: 0, spend: 0, conversions: 0,
+      customMetrics: { sessions, brandedSearch, demoRequests }
+    });
+  }
+
+  const logs: ChangeLog[] = [
+    {
+      id: 'seed-log-1', platform: 'linkedin', campaignName: 'ABM - Enterprise NL',
+      changeType: 'Ads added', description: 'LinkedIn ABM-campagne live',
+      date: dateAt(25), tags: ['abm', 'launch']
+    },
+    {
+      id: 'seed-log-2', platform: 'linkedin', campaignName: 'ABM - Enterprise NL',
+      changeType: 'Ad copy changed', description: 'Nieuwe ad-varianten toegevoegd aan ABM-campagne',
+      date: dateAt(40), tags: ['creative']
+    },
+    {
+      id: 'seed-log-3', platform: 'google', campaignName: 'Search - Brand',
+      changeType: 'Budget changed', description: 'Google Ads budget verhoogd',
+      date: dateAt(60), tags: ['budget']
+    },
+    {
+      id: 'seed-log-4', platform: 'meta', campaignName: 'Retargeting - All Visitors',
+      changeType: 'Campaign paused', description: 'Meta retargeting gepauzeerd wegens lage ROAS',
+      date: dateAt(12), tags: ['pause']
+    }
+  ];
+
+  return { metrics, logs };
+};
+
+const seeded = seedDemoData();
+
 // In-memory store to simulate database
 let mockDb: {
   logs: ChangeLog[];
@@ -8,8 +101,8 @@ let mockDb: {
   imports: ImportRecord[];
   campaigns: Campaign[];
 } = {
-  logs: [],
-  metrics: [],
+  logs: seeded.logs,
+  metrics: seeded.metrics,
   imports: [],
   campaigns: []
 };

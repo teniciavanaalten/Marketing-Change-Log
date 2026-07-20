@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Platform, DateRange, MetricDefinition, PlatformDefinition, Campaign, ChangeTypeDefinition } from '../types';
-import { DEFAULT_METRICS_TEMPLATE, DEFAULT_PLATFORMS, DEFAULT_CHANGE_TYPES_TEMPLATE } from '../constants';
+import { DEFAULT_METRICS_TEMPLATE, DEFAULT_PLATFORMS, DEFAULT_CHANGE_TYPES_TEMPLATE, WEBSITE_CUSTOM_METRICS } from '../constants';
 import { dataService } from '../services/dataService';
 
 interface AppContextType {
@@ -39,9 +39,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // Initialize metrics with defaults for ALL default platforms
   // Note: For custom platforms added later, we add metrics dynamically
   const [metricsConfig, setMetricsConfig] = useState<MetricDefinition[]>(() => {
-    return DEFAULT_PLATFORMS.flatMap(p =>
+    const base = DEFAULT_PLATFORMS.flatMap(p =>
       DEFAULT_METRICS_TEMPLATE.map(m => ({ ...m, platform: p.id }))
     );
+    // Website's custom metrics, registered like user-created custom metrics
+    const website = WEBSITE_CUSTOM_METRICS.map(m => ({ ...m, platform: 'website' }));
+    return [...base, ...website];
   });
 
   // Initialize change types with defaults for ALL default platforms

@@ -13,7 +13,7 @@ import {
 import { DailyMetric, ChangeLog, MetricKey } from '../../types';
 import { CHART_COLORS, BRAND_COLOR, MASTER_VIEW_ID, DEFAULT_METRICS_TEMPLATE } from '../../constants';
 import { useApp } from '../../context/AppContext';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check, Plus, X } from 'lucide-react';
 
 interface AnalyticsChartProps {
   metrics: DailyMetric[];
@@ -22,6 +22,25 @@ interface AnalyticsChartProps {
 }
 
 type Granularity = 'daily' | 'weekly' | 'monthly';
+type MasterMode = 'vergelijk' | 'correleer';
+
+// A correlation series: one (platform, metric) pair
+interface CorrSeries {
+  platform: string;
+  metric: string;
+}
+
+// Lighten a #rrggbb color toward white by pct (0-1), for series sharing a platform
+const shadeColor = (hex: string, pct: number): string => {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return hex;
+  const n = parseInt(match[1], 16);
+  const ch = (shift: number) => {
+    const c = (n >> shift) & 255;
+    return Math.min(255, Math.round(c + (255 - c) * pct));
+  };
+  return `#${((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')}`;
+};
 
 export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeLogs, isLoading }) => {
   const { theme, metricsConfig, selectedPlatform, platforms, dateRange } = useApp();
@@ -41,6 +60,46 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Correlation mode (master view only)
+  const [mode, setMode] = useState<MasterMode>('vergelijk');
+  const [corrSeries, setCorrSeries] = useState<CorrSeries[]>([]);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addPlatformId, setAddPlatformId] = useState<string>('');
+  const addRef = useRef<HTMLDivElement>(null);
+
+  const isCorrelate = isMaster && mode === 'correleer';
+  const pickerPlatform = addPlatformId || platforms[0]?.id || '';
+
+  // Per-series colors: platform color, lightened when a platform repeats
+  const seriesColors = useMemo(() => {
+    const counts: Record<string, number> = {};
+    return corrSeries.map(s => {
+      const k = counts[s.platform] || 0;
+      counts[s.platform] = k + 1;
+      const base = platforms.find(p => p.id === s.platform)?.color || BRAND_COLOR;
+      return k === 0 ? base : shadeColor(base, Math.min(0.7, k * 0.35));
+    });
+  }, [corrSeries, platforms]);
+
+  const seriesLabels = corrSeries.map(s => {
+    const pLabel = platforms.find(p => p.id === s.platform)?.label || s.platform;
+    const mLabel = metricsConfig.find(m => m.platform === s.platform && m.key === s.metric)?.label || s.metric;
+    return `${pLabel} · ${mLabel}`;
+  });
+
+  const addSeries = (platform: string, metric: string) => {
+    setCorrSeries(prev =>
+      prev.length >= 4 || prev.some(s => s.platform === platform && s.metric === metric)
+        ? prev
+        : [...prev, { platform, metric }]
+    );
+    setIsAddOpen(false);
+  };
+
+  const removeSeries = (index: number) => {
+    setCorrSeries(prev => prev.filter((_, i) => i !== index));
+  };
+
   // Get active metrics for this platform.
   // In master view: the fixed core metric set shared by every DailyMetric.
   const platformMetrics = useMemo(() => {
@@ -51,8 +110,9 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
   }, [metricsConfig, selectedPlatform, isMaster]);
 
   const isSingleMetric = selectedMetrics.length === 1;
-  // Master view always plots ONE metric (per-platform lines) on an absolute scale
-  const useAbsoluteScale = isMaster || isSingleMetric;
+  // Vergelijk (master) plots ONE metric on an absolute scale; correlation mode
+  // is always min-max normalized 0-100
+  const useAbsoluteScale = isCorrelate ? false : (isMaster || isSingleMetric);
 
   // Initialize selected metrics if empty or invalid
   useEffect(() => {
@@ -83,11 +143,14 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
     }
   }, [platformMetrics, selectedPlatform]); // removed selectedMetrics dependency to avoid loops, logic handled inside
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
+      }
+      if (addRef.current && !addRef.current.contains(event.target as Node)) {
+        setIsAddOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -165,6 +228,92 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
         fullDate: dateObj.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
       };
     };
+
+    // MASTER + CORRELEER: user-composed (platform, metric) series, each
+    // min-max normalized 0-100 over the visible range. Derived metrics come
+    // from that platform's summed numerators/denominators per bucket.
+    if (isCorrelate) {
+      const grouped = new Map<string, {
+        dateObj: Date;
+        perPlatformRows: Record<string, DailyMetric[]>;
+        changeLogs: ChangeLog[];
+      }>();
+
+      for (let t = startTime; t <= endTime; t += DAY_MS) {
+        const dayStr = new Date(t).toISOString().split('T')[0];
+        const { key, dateObj } = getBucket(dayStr);
+        if (!grouped.has(key)) grouped.set(key, { dateObj, perPlatformRows: {}, changeLogs: [] });
+      }
+
+      metrics.forEach(m => {
+        const { key, dateObj } = getBucket(m.date);
+        if (!grouped.has(key)) grouped.set(key, { dateObj, perPlatformRows: {}, changeLogs: [] });
+        const entry = grouped.get(key)!;
+        (entry.perPlatformRows[m.platform] = entry.perPlatformRows[m.platform] || []).push(m);
+      });
+
+      changeLogs.forEach(l => {
+        const entry = grouped.get(getBucket(l.date).key);
+        if (entry) entry.changeLogs.push(l);
+      });
+
+      const rows = Array.from(grouped.values())
+        .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())
+        .map(entry => {
+          const row: any = {
+            ...formatDates(entry.dateObj),
+            changeLogs: entry.changeLogs,
+            hasChange: entry.changeLogs.length > 0
+          };
+
+          corrSeries.forEach((s, i) => {
+            const platformRows = entry.perPlatformRows[s.platform];
+            if (!platformRows || platformRows.length === 0) {
+              row[`s${i}`] = null;
+              return;
+            }
+            const def = metricsConfig.find(m => m.platform === s.platform && m.key === s.metric);
+            let val = 0;
+            if (def?.isDerived) {
+              let imps = 0, clicks = 0, spend = 0, conv = 0;
+              platformRows.forEach(m => {
+                imps += m.impressions || 0;
+                clicks += m.clicks || 0;
+                spend += m.spend || 0;
+                conv += m.conversions || 0;
+              });
+              if (s.metric === 'ctr') val = imps > 0 ? (clicks / imps) * 100 : 0;
+              else if (s.metric === 'cpc') val = clicks > 0 ? spend / clicks : 0;
+              else if (s.metric === 'cpa') val = conv > 0 ? spend / conv : 0;
+              else if (s.metric === 'conversionRate') val = clicks > 0 ? (conv / clicks) * 100 : 0;
+            } else {
+              let total = 0;
+              platformRows.forEach(m => {
+                if (s.metric in m) total += (m as any)[s.metric] || 0;
+                else if (m.customMetrics && s.metric in m.customMetrics) total += m.customMetrics[s.metric] || 0;
+              });
+              val = def?.aggregation === 'average' ? total / platformRows.length : total;
+            }
+            row[`s${i}`] = parseFloat(val.toFixed(2));
+          });
+
+          return row;
+        });
+
+      // Min-max normalize each series over the visible range (guard flat series)
+      corrSeries.forEach((_s, i) => {
+        const vals = rows.map(r => r[`s${i}`]).filter((v: any) => v != null) as number[];
+        const min = vals.length ? Math.min(...vals) : 0;
+        const max = vals.length ? Math.max(...vals) : 0;
+        const range = max - min;
+        rows.forEach(r => {
+          const v = r[`s${i}`];
+          r[`s${i}_norm`] = v == null ? null : range === 0 ? 50 : ((v - min) / range) * 100;
+        });
+      });
+
+      return rows;
+    }
 
     // MASTER VIEW: one line per platform for the single selected metric.
     // Derived metrics are computed per platform per bucket from summed
@@ -377,7 +526,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
     });
 
     return result;
-  }, [metrics, changeLogs, granularity, platformMetrics, selectedMetrics, dateRange, isMaster, platforms]);
+  }, [metrics, changeLogs, granularity, platformMetrics, selectedMetrics, dateRange, isMaster, platforms, isCorrelate, corrSeries, metricsConfig]);
 
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -389,7 +538,27 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
           <p className="text-slate-500 dark:text-slate-400 text-xs mb-2 font-medium">{data.fullDate}</p>
           
           <div className="space-y-2 mb-3">
-            {isMaster ? (
+            {isCorrelate ? (
+              // Correlation mode: REAL (unnormalized) values per series
+              corrSeries.map((s, i) => {
+                const val = data[`s${i}`];
+                if (val == null) return null;
+                const def = metricsConfig.find(m => m.platform === s.platform && m.key === s.metric);
+                let formattedVal = val.toLocaleString();
+                if (def?.format === 'currency') formattedVal = `$${val.toLocaleString()}`;
+                if (def?.format === 'percent') formattedVal = `${val}%`;
+
+                return (
+                  <div key={`${s.platform}-${s.metric}`} className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: seriesColors[i] }}></div>
+                      <span className="text-sm text-slate-600 dark:text-slate-300">{seriesLabels[i]}</span>
+                    </div>
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">{formattedVal}</span>
+                  </div>
+                );
+              })
+            ) : isMaster ? (
               // Master view: one value per platform for the selected metric
               payload
                 .filter((entry: any) => entry.value != null)
@@ -480,26 +649,121 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
   return (
     <div className="w-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 z-20 relative">
-        {/* Granularity Toggle */}
-        <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-lg flex items-center">
-           {(['daily', 'weekly', 'monthly'] as Granularity[]).map((g) => (
-             <button
-               key={g}
-               onClick={() => setGranularity(g)}
-               className={`
-                 px-3 py-1.5 text-xs font-medium rounded-md capitalize transition-all
-                 ${granularity === g 
-                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
-                   : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                 }
-               `}
-             >
-               {g}
-             </button>
-           ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Master view: Vergelijk / Correleer mode toggle */}
+          {isMaster && (
+            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-lg flex items-center">
+              {(['vergelijk', 'correleer'] as MasterMode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className={`
+                    px-3 py-1.5 text-xs font-medium rounded-md capitalize transition-all
+                    ${mode === m
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                    }
+                  `}
+                >
+                  {m === 'vergelijk' ? 'Vergelijk' : 'Correleer'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Granularity Toggle */}
+          <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-lg flex items-center">
+             {(['daily', 'weekly', 'monthly'] as Granularity[]).map((g) => (
+               <button
+                 key={g}
+                 onClick={() => setGranularity(g)}
+                 className={`
+                   px-3 py-1.5 text-xs font-medium rounded-md capitalize transition-all
+                   ${granularity === g
+                     ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                     : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                   }
+                 `}
+               >
+                 {g}
+               </button>
+             ))}
+          </div>
         </div>
 
-        {/* Multi-Select Metrics Dropdown */}
+        {isCorrelate ? (
+          /* Correlation mode: active series as chips + add-signal popover */
+          <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+            {corrSeries.map((s, i) => (
+              <span
+                key={`${s.platform}-${s.metric}`}
+                className="flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200"
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: seriesColors[i] }}></span>
+                {seriesLabels[i]}
+                <button
+                  onClick={() => removeSeries(i)}
+                  className="p-0.5 text-slate-400 hover:text-red-500 transition-colors"
+                  title="Verwijder signaal"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+
+            {corrSeries.length < 4 && (
+              <div className="relative" ref={addRef}>
+                <button
+                  onClick={() => setIsAddOpen(!isAddOpen)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-700 border border-dashed border-slate-300 dark:border-slate-500 rounded-full text-xs font-medium text-slate-600 dark:text-slate-200 hover:border-brand-500 hover:text-brand-600 transition-colors"
+                >
+                  <Plus size={12} />
+                  Voeg signaal toe
+                </button>
+
+                {isAddOpen && (
+                  <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-xl z-50 overflow-hidden">
+                    <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-700">
+                      <p className="text-xs font-semibold text-slate-500 uppercase mb-1.5">Platform</p>
+                      <select
+                        value={pickerPlatform}
+                        onChange={e => setAddPlatformId(e.target.value)}
+                        className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 outline-none"
+                      >
+                        {platforms.map(p => (
+                          <option key={p.id} value={p.id}>{p.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto p-1">
+                      {metricsConfig.filter(m => m.platform === pickerPlatform).map(m => {
+                        const taken = corrSeries.some(s => s.platform === pickerPlatform && s.metric === m.key);
+                        return (
+                          <button
+                            key={m.key}
+                            onClick={() => addSeries(pickerPlatform, m.key)}
+                            disabled={taken}
+                            className={`
+                              w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors text-left
+                              ${taken
+                                ? 'opacity-50 cursor-not-allowed text-slate-400'
+                                : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                              }
+                            `}
+                          >
+                            <span>{m.label}</span>
+                            {taken && <Check size={14} className="text-slate-400" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+        /* Metrics Dropdown (multi-select; single-select in master Vergelijk) */
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -546,6 +810,7 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
             </div>
           )}
         </div>
+        )}
       </div>
 
       <div className="h-80 w-full relative">
@@ -619,8 +884,24 @@ export const AnalyticsChart: React.FC<AnalyticsChartProps> = ({ metrics, changeL
               formatter={(value) => <span style={{ color: theme === 'dark' ? '#e2e8f0' : '#334155', fontSize: '12px', fontWeight: 500 }}>{value}</span>}
             />
 
-            {/* Master view: one line per platform. Per-platform view: one line per selected metric. */}
-            {isMaster
+            {/* Correleer: one line per composed series. Master Vergelijk: one line
+                per platform. Per-platform view: one line per selected metric. */}
+            {isCorrelate
+              ? corrSeries.map((s, i) => (
+                  <Line
+                    key={`${s.platform}-${s.metric}`}
+                    type="monotone"
+                    dataKey={`s${i}_norm`}
+                    name={seriesLabels[i]}
+                    stroke={seriesColors[i]}
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                    activeDot={{ r: 5, strokeWidth: 0 }}
+                    isAnimationActive={false}
+                  />
+                ))
+              : isMaster
               ? platforms.map(p => (
                   <Line
                     key={p.id}

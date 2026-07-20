@@ -20,6 +20,15 @@ export const DEFAULT_PLATFORMS: PlatformDefinition[] = [
   { id: 'linkedin', label: 'LinkedIn Ads', color: '#0077b5' },
   { id: 'google', label: 'Google Ads', color: '#4285F4' },
   { id: 'meta', label: 'Meta Ads', color: '#1877F2' },
+  { id: 'website', label: 'Website', color: '#7bc765', emoji: '🌐' },
+];
+
+// Custom metrics for the Website platform, registered in metricsConfig
+// exactly like user-created custom metrics (values live in customMetrics)
+export const WEBSITE_CUSTOM_METRICS: Omit<MetricDefinition, 'platform'>[] = [
+  { key: 'sessions', label: 'Sessions', format: 'number', aggregation: 'sum' },
+  { key: 'brandedSearch', label: 'Branded Search', format: 'number', aggregation: 'sum' },
+  { key: 'demoRequests', label: 'Demo Requests', format: 'number', aggregation: 'sum' },
 ];
 
 export const DEFAULT_CHANGE_TYPES_TEMPLATE: Omit<ChangeTypeDefinition, 'platform'>[] = [
